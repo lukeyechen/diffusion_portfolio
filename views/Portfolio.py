@@ -241,33 +241,95 @@ _restore_completed_portfolio = bool(
 if _restore_completed_portfolio:
     # Re-arm the display gate when returning to Portfolio.
     st.session_state["analysis_has_run"] = True
-
 if source == "Upload CSV":
-    uploaded = st.file_uploader("Upload return CSV", type=["csv"])
+    uploaded = st.file_uploader(
+        "Upload return CSV",
+        type=["csv"],
+        key="portfolio_csv_uploader",
+    )
+
     if uploaded is not None:
         try:
-            # Streamlit keeps file_uploader populated after navigation. Do not
-            # mistake the same persistent file for a new upload.
+            # Fingerprint the uploaded file.
+            # Streamlit keeps the uploader populated when navigating
+            # between pages, so uploaded != None does NOT mean new file.
             _uploaded_bytes = uploaded.getvalue()
-            _upload_fingerprint = hashlib.sha256(_uploaded_bytes).hexdigest()
-            _previous_upload_fingerprint = st.session_state.get("portfolio_upload_fingerprint")
-            if _restore_completed_portfolio and _previous_upload_fingerprint == _upload_fingerprint:
-                returns = _saved_portfolio["full_returns"].copy()
-                st.session_state["returns"] = returns.copy()
+            _upload_fingerprint = hashlib.sha256(
+                _uploaded_bytes
+            ).hexdigest()
+
+            _previous_upload_fingerprint = st.session_state.get(
+                "portfolio_upload_fingerprint"
+            )
+
+            # ---------------------------------------------------------
+            # SAME FILE
+            # ---------------------------------------------------------
+            if _previous_upload_fingerprint == _upload_fingerprint:
+
+                # Do NOT clear:
+                # analysis_has_run
+                # shared_current_window
+                # mc_snapshot
+                #
+                # Simply keep using the existing return data.
+
+                if "returns" in st.session_state:
+                    returns = st.session_state["returns"]
+
+                elif (
+                    isinstance(_saved_portfolio, dict)
+                    and "full_returns" in _saved_portfolio
+                ):
+                    returns = _saved_portfolio["full_returns"].copy()
+                    st.session_state["returns"] = returns.copy()
+
+                else:
+                    # Same file fingerprint exists but return data is
+                    # unavailable, so reload the CSV without clearing
+                    # completed analysis state.
+                    uploaded.seek(0)
+                    returns = load_returns_csv(uploaded)
+                    st.session_state["returns"] = returns
+
                 st.session_state["returns_source"] = "Upload CSV"
-                st.session_state["analysis_has_run"] = True
+
+            # ---------------------------------------------------------
+            # ACTUALLY A DIFFERENT FILE
+            # ---------------------------------------------------------
             else:
                 uploaded.seek(0)
                 returns = load_returns_csv(uploaded)
+
                 st.session_state["returns"] = returns
                 st.session_state["returns_source"] = "Upload CSV"
-                st.session_state.pop("returns_signature", None)
-                st.session_state["portfolio_upload_fingerprint"] = _upload_fingerprint
+
+                st.session_state[
+                    "portfolio_upload_fingerprint"
+                ] = _upload_fingerprint
+
+                # A genuinely new dataset invalidates old results.
                 st.session_state["analysis_has_run"] = False
-                st.session_state.pop("shared_current_window", None)
-                st.session_state.pop("mc_snapshot", None)
+
+                st.session_state.pop(
+                    "returns_signature",
+                    None,
+                )
+
+                st.session_state.pop(
+                    "shared_current_window",
+                    None,
+                )
+
+                st.session_state.pop(
+                    "mc_snapshot",
+                    None,
+                )
+
         except Exception as exc:
-            st.error(f"Could not read the uploaded file: {exc}")
+            st.error(
+                f"Could not read the uploaded file: {exc}"
+            )
             st.stop()
 else:
     _saved_tickers = _saved_signature.get(
@@ -278,7 +340,7 @@ else:
     _saved_start = str(
         _saved_signature.get(
             "start",
-            st.session_state.get("start_date", "2021-01-01"),
+            st.session_state.get("start_date", "2000-01-01"),
         )
     )
     _interval_options = [
@@ -291,7 +353,7 @@ else:
     ]
     _saved_interval = _saved_signature.get(
         "interval_label",
-        _saved_portfolio.get("interval_label", "1 month"),
+        _saved_portfolio.get("interval_label", "1 year"),
     )
     _interval_index = (
         _interval_options.index(_saved_interval)
