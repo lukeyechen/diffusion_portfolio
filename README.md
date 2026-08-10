@@ -988,3 +988,54 @@ completed tables disappeared and the page fell back to n=21.
 v36 stores a SHA-256 fingerprint of the uploaded CSV. The completed Portfolio snapshot is
 invalidated only when the uploaded file actually changes. Returning with the same file
 restores the saved full dataset, lookback, analysis flag, and tables.
+
+
+## v37 — Section D save and persistence
+
+Fixed the issue where `D. Current-Window Estimator / Portfolio-Rule Comparison`
+could not be saved independently.
+
+Section D now has:
+- `Save Section D`
+- `Clear Section D`
+- `Download Section D tables + charts (.zip)`
+
+The dedicated ZIP contains:
+- D1 estimator-based metrics
+- D2 common historical-benchmark metrics
+- D3 portfolio weights
+- D4 moment diagnostics
+- Neural training diagnostics
+- Portfolio ↔ D3 synchronization audit
+- Section-D metadata
+- interactive HTML charts for D1, D2, and D3
+
+The Section-D result remains in `st.session_state["mc_snapshot"]` when navigating
+away and back. A stale Portfolio revision now triggers a warning instead of silently
+deleting the D tables.
+
+
+## v38 — Faster B/C rolling OOS studies
+
+The expensive rolling OOS studies now have explicit speed profiles and caching.
+
+### B. Selected-Horizon Monthly OOS Comparison
+- Turbo (default): max 36 OOS months, 50 neural epochs, M=100, 25 reverse steps,
+  hidden width capped at 64, patience 15.
+- Fast: max 60 OOS months, 100 epochs, M=200, 50 reverse steps, hidden width capped
+  at 128, patience 30.
+- Research: uses the full selected 12–120 OOS months and all user neural settings.
+
+### C. 3M / 6M / 12M Research Study
+- Turbo (default): max 24 OOS months per horizon, 40 epochs, M=100, 25 reverse steps,
+  hidden width capped at 64.
+- Fast: max 48 OOS months per horizon, 80 epochs, M=150, 40 reverse steps.
+- Research: full selected OOS period and settings.
+
+Turbo/Fast remain monthly rolling OOS experiments; they simply use fewer OOS months and
+lighter neural/sampling settings. They are intended for exploratory work. Use Research
+for final 60–120 month tables.
+
+The underlying `monthly_rebalance_oos_comparison` call is now wrapped in `st.cache_data`.
+Re-running an identical B or C study in the same Streamlit cache no longer repeats all
+rolling neural retraining.

@@ -100,6 +100,119 @@ def _cached_current_neural(
 
 
 
+
+def _build_section_d_export_zip(snap):
+    """Export only the Current-Window Estimator / Portfolio-Rule comparison."""
+    buffer = io.BytesIO()
+
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        table_map = {
+            "D1_estimator_based_metrics.csv": snap.get("snapshot"),
+            "D2_common_historical_benchmark.csv": snap.get("benchmark"),
+            "D3_portfolio_weights.csv": snap.get("weights"),
+            "D4_moment_diagnostics.csv": snap.get("moments"),
+            "D_neural_training_diagnostics.csv": snap.get("neural_training"),
+            "D_portfolio_sync_audit.csv": snap.get("sync_audit"),
+        }
+
+        for name, df in table_map.items():
+            if isinstance(df, pd.DataFrame):
+                zf.writestr(name, df.to_csv(index=False))
+
+        # D1 chart
+        d1 = snap.get("snapshot")
+        if isinstance(d1, pd.DataFrame) and not d1.empty:
+            fig = px.bar(
+                d1,
+                x="Portfolio rule",
+                y="CER",
+                color="Estimator",
+                barmode="group",
+                title="D1 Estimator-Based Current-Window CER",
+            )
+            zf.writestr(
+                "D1_estimator_based_CER.html",
+                fig.to_html(full_html=True, include_plotlyjs="cdn"),
+            )
+
+        # D2 chart
+        d2 = snap.get("benchmark")
+        if isinstance(d2, pd.DataFrame) and not d2.empty:
+            fig = px.bar(
+                d2,
+                x="Portfolio rule",
+                y="Benchmark CER",
+                color="Estimator",
+                barmode="group",
+                title="D2 Common Historical-Benchmark CER",
+            )
+            zf.writestr(
+                "D2_common_benchmark_CER.html",
+                fig.to_html(full_html=True, include_plotlyjs="cdn"),
+            )
+
+        # D3 chart
+        d3 = snap.get("weights")
+        if isinstance(d3, pd.DataFrame) and not d3.empty:
+            fig = px.bar(
+                d3,
+                x="Asset",
+                y="Weight",
+                color="Estimator",
+                barmode="group",
+                facet_col="Portfolio rule",
+                title="D3 Portfolio Weight Comparison",
+            )
+            zf.writestr(
+                "D3_portfolio_weights.html",
+                fig.to_html(full_html=True, include_plotlyjs="cdn"),
+            )
+
+        # Metadata
+        metadata = pd.DataFrame(
+            {
+                "Field": [
+                    "Portfolio revision",
+                    "Used shared Portfolio",
+                    "T",
+                    "Theoretical T",
+                    "T source",
+                    "b*",
+                    "b*/n signal",
+                    "gamma",
+                    "constraint mode",
+                    "max long weight",
+                    "max short weight",
+                    "max gross exposure",
+                ],
+                "Value": [
+                    snap.get("portfolio_revision"),
+                    snap.get("used_shared_portfolio"),
+                    snap.get("T"),
+                    snap.get("T_theory"),
+                    snap.get("T_source"),
+                    snap.get("b_star"),
+                    snap.get("signal"),
+                    snap.get("effective_gamma"),
+                    snap.get("effective_constraint_mode"),
+                    snap.get("effective_max_long_weight"),
+                    snap.get("effective_max_short_weight"),
+                    snap.get("effective_max_gross_exposure"),
+                ],
+            }
+        )
+        zf.writestr("D_metadata.csv", metadata.to_csv(index=False))
+
+        zf.writestr(
+            "README.txt",
+            "Section D saved-results package.\n"
+            "Contains D1-D4 tables, diagnostics, synchronization audit, metadata, "
+            "and interactive HTML charts.\n",
+        )
+
+    return buffer.getvalue()
+
+
 def _build_method_comparison_export_zip(session_state):
     """Export every currently saved Method Comparison table plus chart-ready HTML."""
     buffer = io.BytesIO()
@@ -535,6 +648,57 @@ with n11:
         format_func=lambda x: f"{x:.0e}",
     )
 
+
+@st.cache_data(show_spinner=False)
+def _cached_monthly_oos_comparison(
+    model_returns,
+    monthly_realized_returns,
+    lookback,
+    test_periods,
+    gamma,
+    rule,
+    m,
+    beta,
+    n_steps,
+    constraint_mode,
+    max_long_weight,
+    max_short_weight,
+    max_gross_exposure,
+    neural_epochs,
+    neural_batch,
+    neural_learning_rate,
+    neural_hidden_dim,
+    neural_validation_fraction,
+    neural_patience,
+    neural_min_delta,
+    seed,
+):
+    """Cache expensive rolling OOS comparisons by data + all model settings."""
+    return monthly_rebalance_oos_comparison(
+        model_returns=model_returns,
+        monthly_realized_returns=monthly_realized_returns,
+        lookback=int(lookback),
+        test_periods=int(test_periods),
+        gamma=float(gamma),
+        rule=rule,
+        m=int(m),
+        beta=float(beta),
+        n_steps=int(n_steps),
+        constraint_mode=constraint_mode,
+        max_long_weight=float(max_long_weight),
+        max_short_weight=float(max_short_weight),
+        max_gross_exposure=float(max_gross_exposure),
+        neural_epochs=int(neural_epochs),
+        neural_batch=int(neural_batch),
+        neural_learning_rate=float(neural_learning_rate),
+        neural_hidden_dim=int(neural_hidden_dim),
+        neural_validation_fraction=float(neural_validation_fraction),
+        neural_patience=int(neural_patience),
+        neural_min_delta=float(neural_min_delta),
+        seed=int(seed),
+    )
+
+
 # ------------------------------------------------------------
 # Data helpers
 # ------------------------------------------------------------
@@ -653,6 +817,47 @@ st.caption(
     "time and evaluated on the same next real monthly return."
 )
 
+_bmode1, _bmode2 = st.columns([1, 2])
+with _bmode1:
+    b_speed_mode = st.selectbox(
+        "B speed mode",
+        ["Turbo", "Fast", "Research"],
+        index=0,
+        key="mc_b_speed_mode",
+    )
+
+if b_speed_mode == "Turbo":
+    b_test_periods = min(int(monthly_oos_periods), 36)
+    b_epochs = min(int(neural_epochs), 50)
+    b_m = min(int(m), 100)
+    b_steps = min(int(n_steps), 25)
+    b_patience = min(int(neural_patience), 15)
+    b_hidden = min(int(neural_hidden), 64)
+    b_batch = max(int(neural_batch), 64)
+elif b_speed_mode == "Fast":
+    b_test_periods = min(int(monthly_oos_periods), 60)
+    b_epochs = min(int(neural_epochs), 100)
+    b_m = min(int(m), 200)
+    b_steps = min(int(n_steps), 50)
+    b_patience = min(int(neural_patience), 30)
+    b_hidden = min(int(neural_hidden), 128)
+    b_batch = max(int(neural_batch), 64)
+else:
+    b_test_periods = int(monthly_oos_periods)
+    b_epochs = int(neural_epochs)
+    b_m = int(m)
+    b_steps = int(n_steps)
+    b_patience = int(neural_patience)
+    b_hidden = int(neural_hidden)
+    b_batch = int(neural_batch)
+
+with _bmode2:
+    st.info(
+        f"{b_speed_mode}: OOS months≤{b_test_periods}, epochs≤{b_epochs}, "
+        f"M={b_m}, reverse steps={b_steps}, hidden≤{b_hidden}, patience={b_patience}. "
+        "Turbo/Fast are exploratory; use Research for the final 60–120 month study."
+    )
+
 selected_months = {"3M": 3, "6M": 6, "12M": 12}[model_horizon]
 
 if st.button(
@@ -678,8 +883,8 @@ if st.button(
         progress.progress(
             15,
             text=(
-                f"Running up to {int(monthly_oos_periods)} rolling OOS months. "
-                "Neural models are retrained in rolling windows..."
+                f"Running up to {int(b_test_periods)} rolling OOS months in "
+                f"{b_speed_mode} mode. Neural models are retrained in rolling windows..."
             ),
         )
 
@@ -691,26 +896,26 @@ if st.button(
             split_summary,
             regime_summary,
             regime_detail,
-        ) = monthly_rebalance_oos_comparison(
+        ) = _cached_monthly_oos_comparison(
             model_returns=model_returns,
             monthly_realized_returns=monthly_realized,
             lookback=int(feasible_lookback),
-            test_periods=int(monthly_oos_periods),
+            test_periods=int(b_test_periods),
             gamma=float(gamma),
             rule=rule,
-            m=int(m),
+            m=int(b_m),
             beta=float(beta),
-            n_steps=int(n_steps),
+            n_steps=int(b_steps),
             constraint_mode=constraint_mode,
             max_long_weight=float(max_long_weight),
             max_short_weight=float(max_short_weight),
             max_gross_exposure=float(max_gross_exposure),
-            neural_epochs=int(neural_epochs),
-            neural_batch=int(neural_batch),
+            neural_epochs=int(b_epochs),
+            neural_batch=int(b_batch),
             neural_learning_rate=float(neural_lr),
-            neural_hidden_dim=int(neural_hidden),
+            neural_hidden_dim=int(b_hidden),
             neural_validation_fraction=float(neural_val_fraction),
-            neural_patience=int(neural_patience),
+            neural_patience=int(b_patience),
             neural_min_delta=float(neural_min_delta),
             seed=int(DEFAULT_SEED),
         )
@@ -728,6 +933,8 @@ if st.button(
 
         st.session_state["mc_selected_results"] = {
             "horizon": model_horizon,
+            "speed_mode": b_speed_mode,
+            "effective_oos_periods": b_test_periods,
             "summary": summary,
             "detail": detail,
             "wealth": wealth,
@@ -747,6 +954,10 @@ if st.button(
 
 if "mc_selected_results" in st.session_state:
     res = st.session_state["mc_selected_results"]
+    st.success(
+        f"Displaying saved B result: {res.get('speed_mode', 'legacy')} mode · "
+        f"requested/effective OOS cap={res.get('effective_oos_periods', 'legacy')} months."
+    )
     st.subheader(f"{res['horizon']} OOS Performance")
     st.dataframe(
         _format_performance(res["summary"]),
@@ -953,26 +1164,42 @@ st.caption(
 
 study_mode = st.radio(
     "Horizon-study speed",
-    ["Fast", "Research"],
+    ["Turbo", "Fast", "Research"],
     horizontal=True,
     index=0,
     key="mc_study_mode",
 )
 
-if study_mode == "Fast":
-    study_epochs = min(100, int(neural_epochs))
-    study_m = min(200, int(m))
-    study_steps = min(50, int(n_steps))
-    study_patience = min(30, int(neural_patience))
+if study_mode == "Turbo":
+    study_epochs = min(40, int(neural_epochs))
+    study_m = min(100, int(m))
+    study_steps = min(25, int(n_steps))
+    study_patience = min(12, int(neural_patience))
+    study_hidden = min(64, int(neural_hidden))
+    study_batch = max(64, int(neural_batch))
+    study_oos_periods = min(24, int(monthly_oos_periods))
+elif study_mode == "Fast":
+    study_epochs = min(80, int(neural_epochs))
+    study_m = min(150, int(m))
+    study_steps = min(40, int(n_steps))
+    study_patience = min(25, int(neural_patience))
+    study_hidden = min(128, int(neural_hidden))
+    study_batch = max(64, int(neural_batch))
+    study_oos_periods = min(48, int(monthly_oos_periods))
 else:
     study_epochs = int(neural_epochs)
     study_m = int(m)
     study_steps = int(n_steps)
     study_patience = int(neural_patience)
+    study_hidden = int(neural_hidden)
+    study_batch = int(neural_batch)
+    study_oos_periods = int(monthly_oos_periods)
 
 st.caption(
-    f"{study_mode} mode: epochs={study_epochs}, M={study_m}, "
-    f"reverse steps={study_steps}, patience={study_patience}."
+    f"{study_mode} mode: OOS months per horizon≤{study_oos_periods}, "
+    f"epochs={study_epochs}, M={study_m}, reverse steps={study_steps}, "
+    f"hidden={study_hidden}, batch={study_batch}, patience={study_patience}. "
+    "Research preserves the full user-selected settings."
 )
 
 if st.button(
@@ -1026,11 +1253,11 @@ if st.button(
                     split_h,
                     regime_h,
                     regime_detail_h,
-                ) = monthly_rebalance_oos_comparison(
+                ) = _cached_monthly_oos_comparison(
                     model_returns=model_returns,
                     monthly_realized_returns=monthly_realized,
                     lookback=int(feasible_lookback),
-                    test_periods=int(monthly_oos_periods),
+                    test_periods=int(study_oos_periods),
                     gamma=float(gamma),
                     rule=rule,
                     m=int(study_m),
@@ -1041,9 +1268,9 @@ if st.button(
                     max_short_weight=float(max_short_weight),
                     max_gross_exposure=float(max_gross_exposure),
                     neural_epochs=int(study_epochs),
-                    neural_batch=int(neural_batch),
+                    neural_batch=int(study_batch),
                     neural_learning_rate=float(neural_lr),
-                    neural_hidden_dim=int(neural_hidden),
+                    neural_hidden_dim=int(study_hidden),
                     neural_validation_fraction=float(neural_val_fraction),
                     neural_patience=int(study_patience),
                     neural_min_delta=float(neural_min_delta),
@@ -1077,6 +1304,7 @@ if st.button(
 
             st.session_state["mc_multi_results"] = {
                 "mode": study_mode,
+                "effective_oos_periods": study_oos_periods,
                 "results": results,
                 "diagnostics": diagnostics,
                 "split_results": split_results,
@@ -1156,6 +1384,45 @@ if "mc_multi_results" in st.session_state:
 # ============================================================
 st.divider()
 st.header("D. Current-Window Estimator / Portfolio-Rule Comparison")
+
+_dsave1, _dsave2, _dsave3 = st.columns([1, 1, 2])
+
+with _dsave1:
+    if st.button(
+        "💾 Save Section D",
+        key="save_section_d",
+        use_container_width=True,
+    ):
+        if "mc_snapshot" not in st.session_state:
+            st.warning("Run Section D first, then click Save Section D.")
+        else:
+            try:
+                st.session_state["section_d_saved_zip"] = _build_section_d_export_zip(
+                    st.session_state["mc_snapshot"]
+                )
+                st.success("Section D results package prepared.")
+            except Exception as exc:
+                st.error(f"Could not save Section D results: {exc}")
+
+with _dsave2:
+    if st.button(
+        "Clear Section D",
+        key="clear_section_d",
+        use_container_width=True,
+    ):
+        st.session_state.pop("mc_snapshot", None)
+        st.session_state.pop("section_d_saved_zip", None)
+        st.rerun()
+
+with _dsave3:
+    if "section_d_saved_zip" in st.session_state:
+        st.download_button(
+            "⬇ Download Section D tables + charts (.zip)",
+            data=st.session_state["section_d_saved_zip"],
+            file_name="section_D_current_window_comparison.zip",
+            mime="application/zip",
+            use_container_width=True,
+        )
 st.caption(
     "Section D is tied to the latest completed Portfolio analysis. If a Portfolio result "
     "exists, D uses that exact estimation window, return interval, T, constraints, neural "
@@ -1566,6 +1833,7 @@ if st.button(
                 }
             )
 
+        st.session_state.pop("section_d_saved_zip", None)
         st.session_state["mc_snapshot"] = {
             "portfolio_revision": (
                 int(shared.get("portfolio_revision", 0))
@@ -1600,6 +1868,10 @@ if st.button(
 
 if "mc_snapshot" in st.session_state:
     snap = st.session_state["mc_snapshot"]
+    st.caption(
+        "Saved Section D result is stored in session state and remains visible when you "
+        "navigate away and return. It changes only when Section D is rerun or cleared."
+    )
 
     _current_shared = st.session_state.get("shared_current_window")
     _current_revision = (
@@ -1613,15 +1885,14 @@ if "mc_snapshot" in st.session_state:
     if (
         snap.get("used_shared_portfolio", False)
         and _current_revision is not None
+        and _snapshot_revision is not None
         and _snapshot_revision != _current_revision
     ):
         st.warning(
-            "Section D is stale because Portfolio has been rerun since this comparison "
-            "was created. Click the green Section-D run button above to rebuild D1-D4 "
-            "from the latest Portfolio result."
+            "Section D was built from an older Portfolio revision. The saved D1-D4 "
+            "tables remain visible for reference, but rerun Section D before interpreting "
+            "them as the current Portfolio comparison."
         )
-        st.session_state.pop("mc_snapshot", None)
-        st.stop()
 
     if snap.get("used_shared_portfolio", False):
         st.success(
