@@ -1,0 +1,28 @@
+V29.3 NAVIGATION FIX
+
+This version DOES NOT use a pages/ directory.
+
+The four page scripts are in views/:
+    views/Portfolio.py
+    views/Method_Comparison.py
+    views/Backtest.py
+    views/Diffusion_Diagnostics.py
+
+app.py registers them explicitly with st.Page + st.navigation and gives every
+page a unique explicit URL:
+    /portfolio
+    /method-comparison
+    /backtest
+    /diffusion-diagnostics
+
+WHY THIS FIX IS DIFFERENT:
+Older versions relied on filenames inside pages/. Streamlit 1.44+ rejects
+multipage apps when two discovered pages infer the same URL pathname.
+This version bypasses automatic pages/ discovery completely.
+
+WHEN UPDATING GITHUB:
+You can delete the old pages/ folder, but even if stale files remain there,
+Streamlit ignores pages/ after app.py executes st.navigation.
+
+IMPORTANT:
+Make sure Streamlit Cloud launches app.py as the Main file path.

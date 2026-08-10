@@ -1,0 +1,28 @@
+V29.4 — NO STREAMLIT MULTIPAGE ROUTER
+
+This version intentionally does NOT use:
+- st.Page
+- st.navigation
+- the pages/ directory
+- st.switch_page
+
+app.py uses one sidebar radio to select:
+1. Portfolio
+2. Method Comparison
+3. Backtest
+4. Diffusion Diagnostics
+
+Only the selected view file is executed.
+
+Therefore the Streamlit error:
+    Multiple Pages specified with URL pathname Backtest
+cannot occur from this application code because no Streamlit Page objects are created.
+
+DEPLOYMENT:
+1. Set Streamlit Cloud Main file path to app.py.
+2. Upload/replace the repository with this package.
+3. The old pages/ folder is no longer used by this version.
+4. For a clean repository, delete the old pages/ folder anyway.
+5. Reboot the Streamlit app after the commit.
+
+Streamlit is pinned to 1.61.1, matching the version shown in the provided deployment log.
