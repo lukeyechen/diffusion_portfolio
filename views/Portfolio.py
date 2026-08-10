@@ -209,7 +209,7 @@ if not isinstance(_saved_signature, dict):
 
 _saved_source = _saved_portfolio.get(
     "source",
-    st.session_state.get("returns_source", "Upload CSV"),
+    st.session_state.get("returns_source", "Yahoo Finance"),
 )
 _source_options = ["Yahoo Finance", "Upload CSV"]
 _source_index = (
