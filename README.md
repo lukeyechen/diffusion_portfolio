@@ -977,3 +977,14 @@ When Portfolio is rerun:
   for the matching Neural-Diffusion portfolio rule.
 
 This makes Portfolio Recommended Weights the authoritative current-window portfolio.
+
+
+## v36 — Portfolio navigation persistence root-cause fix
+The CSV uploader remains populated across Streamlit reruns and page navigation. The old
+code interpreted `uploaded is not None` as a new upload every time Portfolio was revisited,
+then deleted `shared_current_window` and set `analysis_has_run=False`. This is why the
+completed tables disappeared and the page fell back to n=21.
+
+v36 stores a SHA-256 fingerprint of the uploaded CSV. The completed Portfolio snapshot is
+invalidated only when the uploaded file actually changes. Returning with the same file
+restores the saved full dataset, lookback, analysis flag, and tables.

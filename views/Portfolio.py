@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+
 import io
 import zipfile
 import numpy as np
@@ -196,6 +198,8 @@ st.caption(
 _saved_portfolio = st.session_state.get("shared_current_window")
 if not isinstance(_saved_portfolio, dict):
     _saved_portfolio = {}
+if _saved_portfolio.get("upload_fingerprint"):
+    st.session_state.setdefault("portfolio_upload_fingerprint", _saved_portfolio["upload_fingerprint"])
 
 _saved_signature = _saved_portfolio.get("returns_signature")
 if not isinstance(_saved_signature, dict):
@@ -242,12 +246,26 @@ if source == "Upload CSV":
     uploaded = st.file_uploader("Upload return CSV", type=["csv"])
     if uploaded is not None:
         try:
-            returns = load_returns_csv(uploaded)
-            st.session_state["returns"] = returns
-            st.session_state["returns_source"] = "Upload CSV"
-            st.session_state.pop("returns_signature", None)
-            st.session_state["analysis_has_run"] = False
-            st.session_state.pop("shared_current_window", None)
+            # Streamlit keeps file_uploader populated after navigation. Do not
+            # mistake the same persistent file for a new upload.
+            _uploaded_bytes = uploaded.getvalue()
+            _upload_fingerprint = hashlib.sha256(_uploaded_bytes).hexdigest()
+            _previous_upload_fingerprint = st.session_state.get("portfolio_upload_fingerprint")
+            if _restore_completed_portfolio and _previous_upload_fingerprint == _upload_fingerprint:
+                returns = _saved_portfolio["full_returns"].copy()
+                st.session_state["returns"] = returns.copy()
+                st.session_state["returns_source"] = "Upload CSV"
+                st.session_state["analysis_has_run"] = True
+            else:
+                uploaded.seek(0)
+                returns = load_returns_csv(uploaded)
+                st.session_state["returns"] = returns
+                st.session_state["returns_source"] = "Upload CSV"
+                st.session_state.pop("returns_signature", None)
+                st.session_state["portfolio_upload_fingerprint"] = _upload_fingerprint
+                st.session_state["analysis_has_run"] = False
+                st.session_state.pop("shared_current_window", None)
+                st.session_state.pop("mc_snapshot", None)
         except Exception as exc:
             st.error(f"Could not read the uploaded file: {exc}")
             st.stop()
@@ -1097,6 +1115,7 @@ if clear_analysis:
         "main_analysis_results",
         "portfolio_saved_zip",
         "shared_current_window",
+        "portfolio_upload_fingerprint",
     ]:
         st.session_state.pop(key, None)
     st.rerun()
@@ -1374,6 +1393,7 @@ st.session_state["shared_current_window"] = {
     "version": 2,
     "portfolio_revision": _portfolio_revision,
     "source": source,
+    "upload_fingerprint": st.session_state.get("portfolio_upload_fingerprint"),
     "returns_signature": shared_source_signature,
     "interval_label": interval_label,
     "horizon_months": shared_horizon_months,
