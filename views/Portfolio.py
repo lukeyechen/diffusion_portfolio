@@ -211,7 +211,7 @@ _saved_source = _saved_portfolio.get(
     "source",
     st.session_state.get("returns_source", "Upload CSV"),
 )
-_source_options = ["Upload CSV", "Yahoo Finance"]
+_source_options = ["Yahoo Finance", "Upload CSV"]
 _source_index = (
     _source_options.index(_saved_source)
     if _saved_source in _source_options
