@@ -1052,14 +1052,20 @@ if _restore_completed_portfolio:
 st.markdown(
     """
     <style>
-    div.stButton > button[kind="primary"] {
-        background-color: #28A745 !important;
-        border-color: #28A745 !important;
+    /* Normal primary buttons */
+    div.stButton > button[kind="primary"],
+    
+    /* Primary buttons inside Streamlit forms */
+    div.stFormSubmitButton > button[kind="primary"] {
+        background-color: #00BCD4 !important;
+        border-color: #00BCD4 !important;
         color: white !important;
     }
-    div.stButton > button[kind="primary"]:hover {
-        background-color: #218838 !important;
-        border-color: #218838 !important;
+
+    div.stButton > button[kind="primary"]:hover,
+    div.stFormSubmitButton > button[kind="primary"]:hover {
+        background-color: #00ACC1 !important;
+        border-color: #00ACC1 !important;
         color: white !important;
     }
     </style>
