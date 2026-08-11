@@ -1101,14 +1101,29 @@ if apply_view:
     # immediately rerun so tables below use the new selections
     st.rerun()
 
-
 reg_spec = st.session_state["mc_reg_spec"]
 reg_strategy = st.session_state["mc_reg_strategy"]
 
-    reg_view = res["regression_table"][
-        (res["regression_table"]["Specification"] == reg_spec)
-        & (res["regression_table"]["Relative strategy"] == reg_strategy)
-    ].copy()
+reg_view = res["regression_table"][
+    (res["regression_table"]["Specification"] == reg_spec)
+    & (res["regression_table"]["Relative strategy"] == reg_strategy)
+].copy()
+
+st.markdown(f"**{reg_spec} — {reg_strategy}**")
+st.dataframe(
+    reg_view[
+        ["Variable", "Coefficient", "Robust SE", "t-stat", "p-value"]
+    ].style.format(
+        {
+            "Coefficient": "{:.6f}",
+            "Robust SE": "{:.6f}",
+            "t-stat": "{:.3f}",
+            "p-value": "{:.4f}",
+        }
+    ),
+    use_container_width=True,
+    hide_index=True,
+)
 
     st.markdown(f"**{reg_spec} — {reg_strategy}**")
     st.dataframe(
