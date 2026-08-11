@@ -1073,8 +1073,7 @@ st.markdown(
 )
 
 with st.form("portfolio_settings_form", clear_on_submit=False):
-    st.markdown("### Portfolio / Diffusion Settings")
-
+   
 stop_col, save_col, clear_col = st.columns([1, 1, 1])
 
 with stop_col:
