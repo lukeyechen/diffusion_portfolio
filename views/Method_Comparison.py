@@ -226,6 +226,7 @@ def _build_section_c_export_zip(multi):
             "C_multi_horizon_coverage.csv": multi.get("diagnostics"),
             "C_multi_horizon_t_source_performance.csv": multi.get("split_results"),
             "C_multi_horizon_regime_diagnostics.csv": multi.get("regime_results"),
+            "C_multi_horizon_rolling_detail.csv": multi.get("detail"),
         }
         for name, df in table_map.items():
             if isinstance(df, pd.DataFrame):
@@ -903,6 +904,110 @@ def _format_performance(df: pd.DataFrame):
     )
 
 
+def _rolling_realized_cer(returns: pd.Series, gamma: float, window: int = 12) -> pd.Series:
+    """Rolling realized CER using mean - gamma/2 * variance."""
+    rolling_mean = returns.rolling(window=window, min_periods=window).mean()
+    rolling_var = returns.rolling(window=window, min_periods=window).var(ddof=1)
+    return rolling_mean - 0.5 * float(gamma) * rolling_var
+
+
+def _build_diffusion_intensity_dataset(
+    detail: pd.DataFrame,
+    gamma: float,
+    cer_window: int = 12,
+) -> pd.DataFrame:
+    df = detail.copy()
+    df["Realized date"] = pd.to_datetime(df["Realized date"])
+
+    ret = (
+        df.pivot_table(
+            index=["Model horizon", "Realized date"],
+            columns="Method",
+            values="Realized monthly return",
+            aggfunc="first",
+        )
+        .reset_index()
+    )
+
+    intensity = (
+        df[["Model horizon", "Realized date", "T", "b*/n", "T source"]]
+        .drop_duplicates(subset=["Model horizon", "Realized date"])
+    )
+
+    out = ret.merge(
+        intensity,
+        on=["Model horizon", "Realized date"],
+        how="left",
+    )
+
+    if not {"Neural Diffusion", "Historical"}.issubset(out.columns):
+        raise ValueError("Section E requires Historical and Neural Diffusion realized returns.")
+
+    out["Neural - Historical"] = out["Neural Diffusion"] - out["Historical"]
+
+    pieces = []
+    for _, g in out.groupby("Model horizon", sort=False):
+        g = g.sort_values("Realized date").copy()
+        g["CER Neural"] = _rolling_realized_cer(
+            g["Neural Diffusion"], gamma=gamma, window=cer_window
+        )
+        g["CER Historical"] = _rolling_realized_cer(
+            g["Historical"], gamma=gamma, window=cer_window
+        )
+        g["CER Neural - Historical"] = g["CER Neural"] - g["CER Historical"]
+        pieces.append(g)
+
+    return pd.concat(pieces, ignore_index=True)
+
+
+def _quadratic_intensity_regression(df: pd.DataFrame):
+    """HC1-robust quadratic regression of CER gain on T and T^2."""
+    x = df[["T", "CER Neural - Historical"]].dropna().copy()
+    if len(x) < 8:
+        return pd.DataFrame(), np.nan, np.nan
+
+    t = x["T"].to_numpy(dtype=float)
+    y = x["CER Neural - Historical"].to_numpy(dtype=float)
+    X = np.column_stack([np.ones(len(x)), t, t**2])
+
+    xtx_inv = np.linalg.pinv(X.T @ X)
+    beta_hat = xtx_inv @ X.T @ y
+    resid = y - X @ beta_hat
+
+    meat = np.zeros((X.shape[1], X.shape[1]), dtype=float)
+    for i in range(len(x)):
+        xi = X[i : i + 1].T
+        meat += (resid[i] ** 2) * (xi @ xi.T)
+
+    n, k = X.shape
+    hc1 = (n / max(n - k, 1)) * (xtx_inv @ meat @ xtx_inv)
+    se = np.sqrt(np.maximum(np.diag(hc1), 0.0))
+    tstat = np.divide(beta_hat, se, out=np.full_like(beta_hat, np.nan), where=se > 0)
+
+    from math import erf, sqrt
+    pvals = np.array([
+        2.0 * (1.0 - 0.5 * (1.0 + erf(abs(v) / sqrt(2.0)))) if np.isfinite(v) else np.nan
+        for v in tstat
+    ])
+
+    table = pd.DataFrame({
+        "Variable": ["Intercept", "T", "T^2"],
+        "Coefficient": beta_hat,
+        "Robust SE": se,
+        "t-stat": tstat,
+        "p-value": pvals,
+    })
+
+    t_opt = np.nan
+    if np.isfinite(beta_hat[2]) and beta_hat[2] < 0:
+        t_opt = -beta_hat[1] / (2.0 * beta_hat[2])
+
+    sst = np.sum((y - y.mean()) ** 2)
+    r2 = np.nan if sst <= 0 else 1.0 - np.sum(resid**2) / sst
+
+    return table, t_opt, r2
+
+
 # ============================================================
 # A. Return-horizon theoretical study
 # ============================================================
@@ -1471,6 +1576,7 @@ if st.button(
             all_diag = []
             all_split = []
             all_regime = []
+            all_detail = []
 
             for idx, (label, months) in enumerate([("3M", 3), ("6M", 6), ("12M", 12)]):
                 if st.session_state.get("mc_stop_requested", False):
@@ -1532,6 +1638,10 @@ if st.button(
                 summary_h.insert(0, "Model horizon", label)
                 all_summary.append(summary_h)
 
+                detail_h = detail_h.copy()
+                detail_h.insert(0, "Model horizon", label)
+                all_detail.append(detail_h)
+
                 diag_row = {"Model horizon": label, **diagnostics_h}
                 all_diag.append(diag_row)
 
@@ -1552,6 +1662,7 @@ if st.button(
             diagnostics = pd.DataFrame(all_diag)
             split_results = pd.concat(all_split, ignore_index=True)
             regime_results = pd.concat(all_regime, ignore_index=True)
+            detail_results = pd.concat(all_detail, ignore_index=True)
 
             st.session_state.pop("section_c_saved_zip", None)
             st.session_state["mc_multi_results"] = {
@@ -1561,6 +1672,7 @@ if st.button(
                 "diagnostics": diagnostics,
                 "split_results": split_results,
                 "regime_results": regime_results,
+                "detail": detail_results,
             }
             progress.empty()
 
@@ -1628,6 +1740,173 @@ if "mc_multi_results" in st.session_state:
         ),
         use_container_width=True,
         hide_index=True,
+    )
+
+
+
+# ============================================================
+# E. Diffusion intensity vs Neural OOS value
+# ============================================================
+st.divider()
+st.header("E. Diffusion Intensity vs Neural OOS Value")
+st.caption(
+    "Tests whether Neural Diffusion has an intermediate diffusion region in which "
+    "it provides the greatest out-of-sample value relative to Historical estimation."
+)
+
+if (
+    "mc_multi_results" in st.session_state
+    and isinstance(st.session_state["mc_multi_results"].get("detail"), pd.DataFrame)
+):
+    multi_e = st.session_state["mc_multi_results"]
+
+    _e1, _e2 = st.columns([1, 3])
+    with _e1:
+        cer_window = st.number_input(
+            "Rolling CER window (months)",
+            min_value=6,
+            max_value=36,
+            value=12,
+            step=1,
+            key="mc_intensity_cer_window",
+        )
+
+    intensity_df = _build_diffusion_intensity_dataset(
+        multi_e["detail"],
+        gamma=float(gamma),
+        cer_window=int(cer_window),
+    )
+
+    valid_e = intensity_df.dropna(
+        subset=["T", "b*/n", "CER Neural - Historical"]
+    ).copy()
+
+    st.subheader("Horizon-Level Diffusion Intensity and CER Gain")
+
+    perf_e = multi_e["results"].copy()
+    cer_wide = perf_e.pivot_table(
+        index="Model horizon",
+        columns="Method",
+        values="CER / month",
+        aggfunc="first",
+    )
+
+    intensity_summary = (
+        intensity_df.groupby("Model horizon")
+        .agg(
+            Mean_T=("T", "mean"),
+            Mean_bstar_n=("b*/n", "mean"),
+        )
+    )
+
+    horizon_value = intensity_summary.join(cer_wide)
+
+    if {"Neural Diffusion", "Historical"}.issubset(horizon_value.columns):
+        horizon_value["Neural CER - Historical CER"] = (
+            horizon_value["Neural Diffusion"] - horizon_value["Historical"]
+        )
+
+    if {"Gaussian Diffusion", "Historical"}.issubset(horizon_value.columns):
+        horizon_value["Gaussian CER - Historical CER"] = (
+            horizon_value["Gaussian Diffusion"] - horizon_value["Historical"]
+        )
+
+    horizon_value = horizon_value.reset_index()
+
+    format_map = {
+        "Mean_T": "{:.4f}",
+        "Mean_bstar_n": "{:.4f}",
+        "Historical": "{:.3%}",
+        "Gaussian Diffusion": "{:.3%}",
+        "Neural Diffusion": "{:.3%}",
+        "Neural CER - Historical CER": "{:+.3%}",
+        "Gaussian CER - Historical CER": "{:+.3%}",
+    }
+    existing_format = {k: v for k, v in format_map.items() if k in horizon_value.columns}
+
+    st.dataframe(
+        horizon_value.style.format(existing_format),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    if len(valid_e) >= 3:
+        st.subheader("T vs Neural CER Improvement")
+        fig_t = px.scatter(
+            valid_e,
+            x="T",
+            y="CER Neural - Historical",
+            color="Model horizon",
+            hover_data=["Realized date", "b*/n", "T source"],
+            trendline="lowess",
+            title="Diffusion Horizon T vs Rolling Neural − Historical CER",
+        )
+        fig_t.add_hline(y=0.0, line_dash="dash", annotation_text="No Neural advantage")
+        st.plotly_chart(fig_t, use_container_width=True)
+
+        st.subheader("b*/n vs Neural CER Improvement")
+        fig_b = px.scatter(
+            valid_e,
+            x="b*/n",
+            y="CER Neural - Historical",
+            color="Model horizon",
+            hover_data=["Realized date", "T", "T source"],
+            trendline="lowess",
+            title="b*/n vs Rolling Neural − Historical CER",
+        )
+        fig_b.add_vline(
+            x=1.0,
+            line_dash="dash",
+            annotation_text="Theoretical boundary b*/n = 1",
+        )
+        fig_b.add_hline(y=0.0, line_dash="dash", annotation_text="No Neural advantage")
+        st.plotly_chart(fig_b, use_container_width=True)
+
+        st.subheader("Quadratic Test for an Intermediate Diffusion Region")
+        quad_table, t_opt, quad_r2 = _quadratic_intensity_regression(valid_e)
+
+        if not quad_table.empty:
+            st.dataframe(
+                quad_table.style.format(
+                    {
+                        "Coefficient": "{:.6f}",
+                        "Robust SE": "{:.6f}",
+                        "t-stat": "{:.3f}",
+                        "p-value": "{:.4f}",
+                    }
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            q1, q2 = st.columns(2)
+            q1.metric(
+                "Quadratic regression R²",
+                f"{quad_r2:.3f}" if np.isfinite(quad_r2) else "N/A",
+            )
+            q2.metric(
+                "Estimated empirical T optimum",
+                f"{t_opt:.4f}" if np.isfinite(t_opt) else "Not identified",
+            )
+
+            if np.isfinite(t_opt):
+                st.success(
+                    "The fitted quadratic is concave in T and implies an interior "
+                    f"empirical optimum at T ≈ {t_opt:.4f}."
+                )
+            else:
+                st.info(
+                    "No interior optimum is reported because the fitted T² coefficient "
+                    "is not negative."
+                )
+    else:
+        st.warning(
+            "Not enough rolling observations are available after the CER window is applied."
+        )
+else:
+    st.info(
+        "Run Section C first. Section E needs the saved 3M/6M/12M rolling detail "
+        "to study T and b*/n against Neural OOS CER improvement."
     )
 
 

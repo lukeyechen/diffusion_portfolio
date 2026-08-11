@@ -209,9 +209,9 @@ if not isinstance(_saved_signature, dict):
 
 _saved_source = _saved_portfolio.get(
     "source",
-    st.session_state.get("returns_source", "Yahoo Finance"),
+    st.session_state.get("returns_source", "Upload CSV"),
 )
-_source_options = ["Yahoo Finance", "Upload CSV"]
+_source_options = ["Upload CSV", "Yahoo Finance"]
 _source_index = (
     _source_options.index(_saved_source)
     if _saved_source in _source_options
@@ -241,95 +241,32 @@ _restore_completed_portfolio = bool(
 if _restore_completed_portfolio:
     # Re-arm the display gate when returning to Portfolio.
     st.session_state["analysis_has_run"] = True
-if source == "Upload CSV":
-    uploaded = st.file_uploader(
-        "Upload return CSV",
-        type=["csv"],
-        key="portfolio_csv_uploader",
-    )
 
+if source == "Upload CSV":
+    uploaded = st.file_uploader("Upload return CSV", type=["csv"])
     if uploaded is not None:
         try:
-            # Fingerprint the uploaded file.
-            # Streamlit keeps the uploader populated when navigating
-            # between pages, so uploaded != None does NOT mean new file.
+            # Streamlit keeps file_uploader populated after navigation. Do not
+            # mistake the same persistent file for a new upload.
             _uploaded_bytes = uploaded.getvalue()
-            _upload_fingerprint = hashlib.sha256(
-                _uploaded_bytes
-            ).hexdigest()
-
-            _previous_upload_fingerprint = st.session_state.get(
-                "portfolio_upload_fingerprint"
-            )
-
-            # ---------------------------------------------------------
-            # SAME FILE
-            # ---------------------------------------------------------
-            if _previous_upload_fingerprint == _upload_fingerprint:
-
-                # Do NOT clear:
-                # analysis_has_run
-                # shared_current_window
-                # mc_snapshot
-                #
-                # Simply keep using the existing return data.
-
-                if "returns" in st.session_state:
-                    returns = st.session_state["returns"]
-
-                elif (
-                    isinstance(_saved_portfolio, dict)
-                    and "full_returns" in _saved_portfolio
-                ):
-                    returns = _saved_portfolio["full_returns"].copy()
-                    st.session_state["returns"] = returns.copy()
-
-                else:
-                    # Same file fingerprint exists but return data is
-                    # unavailable, so reload the CSV without clearing
-                    # completed analysis state.
-                    uploaded.seek(0)
-                    returns = load_returns_csv(uploaded)
-                    st.session_state["returns"] = returns
-
+            _upload_fingerprint = hashlib.sha256(_uploaded_bytes).hexdigest()
+            _previous_upload_fingerprint = st.session_state.get("portfolio_upload_fingerprint")
+            if _restore_completed_portfolio and _previous_upload_fingerprint == _upload_fingerprint:
+                returns = _saved_portfolio["full_returns"].copy()
+                st.session_state["returns"] = returns.copy()
                 st.session_state["returns_source"] = "Upload CSV"
-
-            # ---------------------------------------------------------
-            # ACTUALLY A DIFFERENT FILE
-            # ---------------------------------------------------------
+                st.session_state["analysis_has_run"] = True
             else:
                 uploaded.seek(0)
                 returns = load_returns_csv(uploaded)
-
                 st.session_state["returns"] = returns
                 st.session_state["returns_source"] = "Upload CSV"
-
-                st.session_state[
-                    "portfolio_upload_fingerprint"
-                ] = _upload_fingerprint
-
-                # A genuinely new dataset invalidates old results.
+                st.session_state.pop("returns_signature", None)
+                st.session_state["portfolio_upload_fingerprint"] = _upload_fingerprint
                 st.session_state["analysis_has_run"] = False
-
-                st.session_state.pop(
-                    "returns_signature",
-                    None,
-                )
-
-                st.session_state.pop(
-                    "shared_current_window",
-                    None,
-                )
-
-                st.session_state.pop(
-                    "mc_snapshot",
-                    None,
-                )
-
+                st.session_state.pop("shared_current_window", None)
         except Exception as exc:
-            st.error(
-                f"Could not read the uploaded file: {exc}"
-            )
+            st.error(f"Could not read the uploaded file: {exc}")
             st.stop()
 else:
     _saved_tickers = _saved_signature.get(
@@ -340,7 +277,7 @@ else:
     _saved_start = str(
         _saved_signature.get(
             "start",
-            st.session_state.get("start_date", "2000-01-01"),
+            st.session_state.get("start_date", "2021-01-01"),
         )
     )
     _interval_options = [
@@ -353,7 +290,7 @@ else:
     ]
     _saved_interval = _saved_signature.get(
         "interval_label",
-        _saved_portfolio.get("interval_label", "1 year"),
+        _saved_portfolio.get("interval_label", "1 month"),
     )
     _interval_index = (
         _interval_options.index(_saved_interval)
@@ -681,218 +618,364 @@ else:
 # ============================================================
 # Integrated settings panel
 # ============================================================
-st.markdown("### Portfolio / Diffusion Settings")
+with st.form("portfolio_settings_form", clear_on_submit=False):
+    st.markdown("### Portfolio / Diffusion Settings")
 
-r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+    r1c1, r1c2, r1c3, r1c4 = st.columns(4)
 
-with r1c1:
-    gamma = st.number_input(
-        "Risk aversion γ",
-        min_value=0.1,
-        value=float(_saved_portfolio.get("gamma", DEFAULT_GAMMA)),
-        step=0.1,
-    )
-
-with r1c2:
-    _saved_rule = _saved_portfolio.get("portfolio_rule", "Mean-Variance")
-    mean_variance_index = (
-        SUPPORTED_RULES.index(_saved_rule)
-        if _saved_rule in SUPPORTED_RULES
-        else (
-            SUPPORTED_RULES.index("Mean-Variance")
-            if "Mean-Variance" in SUPPORTED_RULES
-            else 0
-        )
-    )
-    rule = st.selectbox(
-        "Portfolio rule",
-        SUPPORTED_RULES,
-        index=mean_variance_index,
-    )
-
-with r1c3:
-    constraint_mode = st.selectbox(
-        "Portfolio constraint",
-        CONSTRAINT_MODES,
-        index=(
-            CONSTRAINT_MODES.index(_saved_portfolio.get("constraint_mode"))
-            if _saved_portfolio.get("constraint_mode") in CONSTRAINT_MODES
-            else CONSTRAINT_MODES.index(DEFAULT_CONSTRAINT_MODE)
-        ),
-        help=(
-            "Long-only is recommended for practical use. "
-            "Research / Unconstrained reproduces the paper-style optimizer."
-        ),
-    )
-
-with r1c4:
-    _estimator_options = ["Historical", "Diffusion"]
-    _saved_estimator = _saved_portfolio.get("estimator", "Diffusion")
-    estimator = st.selectbox(
-        "Estimator",
-        _estimator_options,
-        index=(
-            _estimator_options.index(_saved_estimator)
-            if _saved_estimator in _estimator_options
-            else 1
-        ),
-        help="Diffusion is the default estimator.",
-    )
-
-max_long_weight = float(DEFAULT_MAX_LONG_WEIGHT)
-max_short_weight = float(DEFAULT_MAX_SHORT_WEIGHT)
-max_gross_exposure = float(DEFAULT_MAX_GROSS_EXPOSURE)
-
-r2c1, r2c2, r2c3, r2c4 = st.columns(4)
-
-with r2c1:
-    if constraint_mode == "Long-only":
-        min_feasible_weight = 1.0 / n_assets
-        default_cap = max(float(_saved_portfolio.get("max_long_weight", DEFAULT_MAX_LONG_WEIGHT)), min_feasible_weight)
-        max_long_weight = st.slider(
-            "Maximum weight per asset",
-            min_value=float(min_feasible_weight),
-            max_value=1.0,
-            value=float(min(default_cap, 1.0)),
-            step=0.05,
-            format="%.2f",
-        )
-    elif constraint_mode == "Limited Long-Short":
-        max_long_weight = st.slider(
-            "Maximum long weight per asset",
-            min_value=0.05,
-            max_value=1.0,
-            value=float(_saved_portfolio.get("max_long_weight", DEFAULT_MAX_LONG_WEIGHT)),
-            step=0.05,
-        )
-    else:
-        st.caption("No long-weight cap in unconstrained mode.")
-
-with r2c2:
-    if constraint_mode == "Limited Long-Short":
-        max_short_weight = st.slider(
-            "Maximum short weight per asset",
-            min_value=0.0,
-            max_value=1.0,
-            value=float(_saved_portfolio.get("max_short_weight", DEFAULT_MAX_SHORT_WEIGHT)),
-            step=0.05,
-        )
-    else:
-        st.number_input(
-            "Maximum short weight",
-            value=float(DEFAULT_MAX_SHORT_WEIGHT),
-            disabled=True,
-        )
-
-with r2c3:
-    if constraint_mode == "Limited Long-Short":
-        max_gross_exposure = st.slider(
-            "Maximum gross exposure",
-            min_value=1.0,
-            max_value=3.0,
-            value=float(_saved_portfolio.get("max_gross_exposure", DEFAULT_MAX_GROSS_EXPOSURE)),
+    with r1c1:
+        gamma = st.number_input(
+            "Risk aversion γ",
+            min_value=0.1,
+            value=float(_saved_portfolio.get("gamma", DEFAULT_GAMMA)),
             step=0.1,
         )
-    else:
-        st.number_input(
-            "Maximum gross exposure",
-            value=float(DEFAULT_MAX_GROSS_EXPOSURE),
-            disabled=True,
+
+    with r1c2:
+        _saved_rule = _saved_portfolio.get("portfolio_rule", "Mean-Variance")
+        mean_variance_index = (
+            SUPPORTED_RULES.index(_saved_rule)
+            if _saved_rule in SUPPORTED_RULES
+            else (
+                SUPPORTED_RULES.index("Mean-Variance")
+                if "Mean-Variance" in SUPPORTED_RULES
+                else 0
+            )
+        )
+        rule = st.selectbox(
+            "Portfolio rule",
+            SUPPORTED_RULES,
+            index=mean_variance_index,
         )
 
-with r2c4:
-    if estimator == "Diffusion":
-        _score_options = ["Analytical Gaussian", "Learned Neural Score"]
-        _saved_score = _saved_portfolio.get("score_model", "Learned Neural Score")
-        score_model = st.selectbox(
-            "Diffusion score model",
-            _score_options,
+    with r1c3:
+        constraint_mode = st.selectbox(
+            "Portfolio constraint",
+            CONSTRAINT_MODES,
             index=(
-                _score_options.index(_saved_score)
-                if _saved_score in _score_options
-                else 1
+                CONSTRAINT_MODES.index(_saved_portfolio.get("constraint_mode"))
+                if _saved_portfolio.get("constraint_mode") in CONSTRAINT_MODES
+                else CONSTRAINT_MODES.index(DEFAULT_CONSTRAINT_MODE)
             ),
             help=(
-                "Learned Neural Score is the default. Analytical Gaussian uses the "
-                "closed-form Gaussian score."
+                "Long-only is recommended for practical use. "
+                "Research / Unconstrained reproduces the paper-style optimizer."
             ),
         )
-    else:
-        score_model = "None"
-        st.selectbox(
-            "Diffusion score model",
-            ["Not used"],
-            disabled=True,
-        )
 
-if constraint_mode == "Research / Unconstrained":
-    st.warning(
-        "Research / Unconstrained can produce very large long and short positions."
-    )
-
-if estimator == "Diffusion":
-    st.markdown("**Diffusion / neural settings**")
-    d1, d2, d3, d4 = st.columns(4)
-
-    with d1:
-        _tuning_options = ["Validation tuned", "Theoretical constrained"]
-        _saved_tuning = _saved_portfolio.get("tuning_mode", "Theoretical constrained")
-        tuning_mode = st.selectbox(
-            "Diffusion horizon tuning",
-            _tuning_options,
+    with r1c4:
+        _estimator_options = ["Historical", "Diffusion"]
+        _saved_estimator = _saved_portfolio.get("estimator", "Diffusion")
+        estimator = st.selectbox(
+            "Estimator",
+            _estimator_options,
             index=(
-                _tuning_options.index(_saved_tuning)
-                if _saved_tuning in _tuning_options
+                _estimator_options.index(_saved_estimator)
+                if _saved_estimator in _estimator_options
                 else 1
             ),
-            help=(
-                "Theoretical constrained is the default and uses "
-                "T=max(0, log(n/b*)/β)."
-            ),
-        )
-    with d2:
-        m = st.number_input(
-            "Synthetic samples M",
-            min_value=0,
-            value=int(_saved_portfolio.get("m", DEFAULT_M)),
-            step=100,
-        )
-    with d3:
-        beta = st.number_input(
-            "Constant β",
-            min_value=0.01,
-            value=float(_saved_portfolio.get("beta", DEFAULT_BETA)),
-            step=0.1,
-        )
-    with d4:
-        n_steps = st.number_input(
-            "Reverse SDE steps",
-            min_value=10,
-            value=int(_saved_portfolio.get("n_steps", 100)),
-            step=10,
+            help="Diffusion is the default estimator.",
         )
 
-    if score_model == "Learned Neural Score":
-        n1, n2, n3, n4 = st.columns(4)
+    max_long_weight = float(DEFAULT_MAX_LONG_WEIGHT)
+    max_short_weight = float(DEFAULT_MAX_SHORT_WEIGHT)
+    max_gross_exposure = float(DEFAULT_MAX_GROSS_EXPOSURE)
 
-        with n1:
-            _neural_mode_options = ["Fast", "Standard", "Research"]
-            _saved_neural_mode = _saved_portfolio.get("neural_training_mode", "Fast")
-            neural_training_mode = st.selectbox(
-                "Neural training mode",
-                _neural_mode_options,
-                index=(
-                    _neural_mode_options.index(_saved_neural_mode)
-                    if _saved_neural_mode in _neural_mode_options
-                    else 0
-                ),
-                help=(
-                    "Fast: interactive use. Standard: stronger training. "
-                    "Research: full manual controls."
-                ),
+    r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+
+    with r2c1:
+        if constraint_mode == "Long-only":
+            min_feasible_weight = 1.0 / n_assets
+            default_cap = max(float(_saved_portfolio.get("max_long_weight", DEFAULT_MAX_LONG_WEIGHT)), min_feasible_weight)
+            max_long_weight = st.number_input(
+                "Maximum weight per asset",
+                min_value=float(min_feasible_weight),
+                max_value=1.0,
+                value=float(min(default_cap, 1.0)),
+                step=0.05,
+            )
+        elif constraint_mode == "Limited Long-Short":
+            max_long_weight = st.number_input(
+                "Maximum long weight per asset",
+                min_value=0.05,
+                max_value=1.0,
+                value=float(_saved_portfolio.get("max_long_weight", DEFAULT_MAX_LONG_WEIGHT)),
+                step=0.05,
+            )
+        else:
+            st.caption("No long-weight cap in unconstrained mode.")
+
+    with r2c2:
+        if constraint_mode == "Limited Long-Short":
+            max_short_weight = st.number_input(
+                "Maximum short weight per asset",
+                min_value=0.0,
+                max_value=1.0,
+                value=float(_saved_portfolio.get("max_short_weight", DEFAULT_MAX_SHORT_WEIGHT)),
+                step=0.05,
+            )
+        else:
+            st.number_input(
+                "Maximum short weight",
+                value=float(DEFAULT_MAX_SHORT_WEIGHT),
+                disabled=True,
             )
 
-        if neural_training_mode == "Fast":
+    with r2c3:
+        if constraint_mode == "Limited Long-Short":
+            max_gross_exposure = st.number_input(
+                "Maximum gross exposure",
+                min_value=1.0,
+                max_value=3.0,
+                value=float(_saved_portfolio.get("max_gross_exposure", DEFAULT_MAX_GROSS_EXPOSURE)),
+                step=0.10,
+            )
+        else:
+            st.number_input(
+                "Maximum gross exposure",
+                value=float(DEFAULT_MAX_GROSS_EXPOSURE),
+                disabled=True,
+            )
+
+    with r2c4:
+        if estimator == "Diffusion":
+            _score_options = ["Analytical Gaussian", "Learned Neural Score"]
+            _saved_score = _saved_portfolio.get("score_model", "Learned Neural Score")
+            score_model = st.selectbox(
+                "Diffusion score model",
+                _score_options,
+                index=(
+                    _score_options.index(_saved_score)
+                    if _saved_score in _score_options
+                    else 1
+                ),
+                help=(
+                    "Learned Neural Score is the default. Analytical Gaussian uses the "
+                    "closed-form Gaussian score."
+                ),
+            )
+        else:
+            score_model = "None"
+            st.selectbox(
+                "Diffusion score model",
+                ["Not used"],
+                disabled=True,
+            )
+
+    if constraint_mode == "Research / Unconstrained":
+        st.warning(
+            "Research / Unconstrained can produce very large long and short positions."
+        )
+
+    if estimator == "Diffusion":
+        st.markdown("**Diffusion / neural settings**")
+        d1, d2, d3, d4 = st.columns(4)
+
+        with d1:
+            _tuning_options = ["Validation tuned", "Theoretical constrained"]
+            _saved_tuning = _saved_portfolio.get("tuning_mode", "Theoretical constrained")
+            tuning_mode = st.selectbox(
+                "Diffusion horizon tuning",
+                _tuning_options,
+                index=(
+                    _tuning_options.index(_saved_tuning)
+                    if _saved_tuning in _tuning_options
+                    else 1
+                ),
+                help=(
+                    "Theoretical constrained is the default and uses "
+                    "T=max(0, log(n/b*)/β)."
+                ),
+            )
+        with d2:
+            m = st.number_input(
+                "Synthetic samples M",
+                min_value=0,
+                value=int(_saved_portfolio.get("m", DEFAULT_M)),
+                step=100,
+            )
+        with d3:
+            beta = st.number_input(
+                "Constant β",
+                min_value=0.01,
+                value=float(_saved_portfolio.get("beta", DEFAULT_BETA)),
+                step=0.1,
+            )
+        with d4:
+            n_steps = st.number_input(
+                "Reverse SDE steps",
+                min_value=10,
+                value=int(_saved_portfolio.get("n_steps", 100)),
+                step=10,
+            )
+
+        if score_model == "Learned Neural Score":
+            n1, n2, n3, n4 = st.columns(4)
+
+            with n1:
+                _neural_mode_options = ["Fast", "Standard", "Research"]
+                _saved_neural_mode = _saved_portfolio.get("neural_training_mode", "Fast")
+                neural_training_mode = st.selectbox(
+                    "Neural training mode",
+                    _neural_mode_options,
+                    index=(
+                        _neural_mode_options.index(_saved_neural_mode)
+                        if _saved_neural_mode in _neural_mode_options
+                        else 0
+                    ),
+                    help=(
+                        "Fast: interactive use. Standard: stronger training. "
+                        "Research: full manual controls."
+                    ),
+                )
+
+            if neural_training_mode == "Fast":
+                neural_epochs = 100
+                neural_hidden = 64
+                neural_lr = 1e-3
+                neural_batch = 64
+                neural_val_fraction = 0.20
+                neural_patience = 30
+                neural_min_delta = 1e-3
+
+            elif neural_training_mode == "Standard":
+                neural_epochs = 300
+                neural_hidden = 128
+                neural_lr = 1e-3
+                neural_batch = 64
+                neural_val_fraction = 0.20
+                neural_patience = 75
+                neural_min_delta = 1e-3
+
+            else:
+                neural_epochs = int(_saved_portfolio.get("neural_epochs", 1000))
+                neural_hidden = int(_saved_portfolio.get("neural_hidden", 128))
+                neural_lr = float(_saved_portfolio.get("neural_lr", 1e-3))
+                neural_batch = int(_saved_portfolio.get("neural_batch", 32))
+                neural_val_fraction = float(_saved_portfolio.get("neural_val_fraction", 0.20))
+                neural_patience = int(_saved_portfolio.get("neural_patience", 100))
+                neural_min_delta = float(_saved_portfolio.get("neural_min_delta", 1e-3))
+
+            with n2:
+                if neural_training_mode == "Research":
+                    neural_epochs = st.number_input(
+                        "Maximum neural epochs",
+                        min_value=50,
+                        max_value=5000,
+                        value=int(neural_epochs),
+                        step=50,
+                    )
+                else:
+                    st.number_input(
+                        "Maximum neural epochs",
+                        value=int(neural_epochs),
+                        disabled=True,
+                    )
+
+            with n3:
+                if neural_training_mode == "Research":
+                    _hidden_options = [32, 64, 128, 256]
+                    neural_hidden = st.selectbox(
+                        "Hidden width",
+                        _hidden_options,
+                        index=(
+                            _hidden_options.index(int(neural_hidden))
+                            if int(neural_hidden) in _hidden_options
+                            else 2
+                        ),
+                    )
+                else:
+                    st.selectbox(
+                        "Hidden width",
+                        [int(neural_hidden)],
+                        disabled=True,
+                    )
+
+            with n4:
+                if neural_training_mode == "Research":
+                    _batch_options = [16, 32, 64, 128]
+                    neural_batch = st.selectbox(
+                        "Batch size",
+                        _batch_options,
+                        index=(
+                            _batch_options.index(int(neural_batch))
+                            if int(neural_batch) in _batch_options
+                            else 1
+                        ),
+                    )
+                else:
+                    st.selectbox(
+                        "Batch size",
+                        [int(neural_batch)],
+                        disabled=True,
+                    )
+
+            n5, n6, n7 = st.columns(3)
+            with n5:
+                if neural_training_mode == "Research":
+                    _lr_options = [1e-4, 3e-4, 1e-3, 3e-3]
+                    neural_lr = st.selectbox(
+                        "Learning rate",
+                        _lr_options,
+                        index=(
+                            _lr_options.index(float(neural_lr))
+                            if float(neural_lr) in _lr_options
+                            else 2
+                        ),
+                        format_func=lambda x: f"{x:.0e}",
+                    )
+                else:
+                    st.selectbox(
+                        "Learning rate",
+                        [float(neural_lr)],
+                        disabled=True,
+                        format_func=lambda x: f"{x:.0e}",
+                    )
+
+            with n6:
+                if neural_training_mode == "Research":
+                    neural_val_fraction = st.slider(
+                        "Neural validation fraction",
+                        min_value=0.10,
+                        max_value=0.40,
+                        value=float(neural_val_fraction),
+                        step=0.05,
+                    )
+                else:
+                    st.slider(
+                        "Neural validation fraction",
+                        min_value=0.10,
+                        max_value=0.40,
+                        value=float(neural_val_fraction),
+                        step=0.05,
+                        disabled=True,
+                    )
+
+            with n7:
+                if neural_training_mode == "Research":
+                    neural_patience = st.number_input(
+                        "Early-stopping patience",
+                        min_value=10,
+                        max_value=500,
+                        value=int(neural_patience),
+                        step=10,
+                    )
+                    neural_min_delta = 1e-3
+                else:
+                    st.number_input(
+                        "Early-stopping patience",
+                        value=int(neural_patience),
+                        disabled=True,
+                    )
+
+            st.caption(
+                f"Effective configuration: **{neural_training_mode}** · "
+                f"epochs={int(neural_epochs)} · hidden={int(neural_hidden)} · "
+                f"batch={int(neural_batch)} · lr={neural_lr:.0e} · "
+                f"validation={neural_val_fraction:.0%} · patience={int(neural_patience)}."
+            )
+        else:
+            neural_training_mode = "Not used"
             neural_epochs = 100
             neural_hidden = 64
             neural_lr = 1e-3
@@ -901,143 +984,23 @@ if estimator == "Diffusion":
             neural_patience = 30
             neural_min_delta = 1e-3
 
-        elif neural_training_mode == "Standard":
-            neural_epochs = 300
-            neural_hidden = 128
-            neural_lr = 1e-3
-            neural_batch = 64
-            neural_val_fraction = 0.20
-            neural_patience = 75
-            neural_min_delta = 1e-3
-
+        if tuning_mode == "Validation tuned":
+            validation_fraction = st.slider(
+                "Validation fraction",
+                min_value=0.10,
+                max_value=0.40,
+                value=0.20,
+                step=0.05,
+            )
         else:
-            neural_epochs = int(_saved_portfolio.get("neural_epochs", 1000))
-            neural_hidden = int(_saved_portfolio.get("neural_hidden", 128))
-            neural_lr = float(_saved_portfolio.get("neural_lr", 1e-3))
-            neural_batch = int(_saved_portfolio.get("neural_batch", 32))
-            neural_val_fraction = float(_saved_portfolio.get("neural_val_fraction", 0.20))
-            neural_patience = int(_saved_portfolio.get("neural_patience", 100))
-            neural_min_delta = float(_saved_portfolio.get("neural_min_delta", 1e-3))
-
-        with n2:
-            if neural_training_mode == "Research":
-                neural_epochs = st.number_input(
-                    "Maximum neural epochs",
-                    min_value=50,
-                    max_value=5000,
-                    value=int(neural_epochs),
-                    step=50,
-                )
-            else:
-                st.number_input(
-                    "Maximum neural epochs",
-                    value=int(neural_epochs),
-                    disabled=True,
-                )
-
-        with n3:
-            if neural_training_mode == "Research":
-                _hidden_options = [32, 64, 128, 256]
-                neural_hidden = st.selectbox(
-                    "Hidden width",
-                    _hidden_options,
-                    index=(
-                        _hidden_options.index(int(neural_hidden))
-                        if int(neural_hidden) in _hidden_options
-                        else 2
-                    ),
-                )
-            else:
-                st.selectbox(
-                    "Hidden width",
-                    [int(neural_hidden)],
-                    disabled=True,
-                )
-
-        with n4:
-            if neural_training_mode == "Research":
-                _batch_options = [16, 32, 64, 128]
-                neural_batch = st.selectbox(
-                    "Batch size",
-                    _batch_options,
-                    index=(
-                        _batch_options.index(int(neural_batch))
-                        if int(neural_batch) in _batch_options
-                        else 1
-                    ),
-                )
-            else:
-                st.selectbox(
-                    "Batch size",
-                    [int(neural_batch)],
-                    disabled=True,
-                )
-
-        n5, n6, n7 = st.columns(3)
-        with n5:
-            if neural_training_mode == "Research":
-                _lr_options = [1e-4, 3e-4, 1e-3, 3e-3]
-                neural_lr = st.selectbox(
-                    "Learning rate",
-                    _lr_options,
-                    index=(
-                        _lr_options.index(float(neural_lr))
-                        if float(neural_lr) in _lr_options
-                        else 2
-                    ),
-                    format_func=lambda x: f"{x:.0e}",
-                )
-            else:
-                st.selectbox(
-                    "Learning rate",
-                    [float(neural_lr)],
-                    disabled=True,
-                    format_func=lambda x: f"{x:.0e}",
-                )
-
-        with n6:
-            if neural_training_mode == "Research":
-                neural_val_fraction = st.slider(
-                    "Neural validation fraction",
-                    min_value=0.10,
-                    max_value=0.40,
-                    value=float(neural_val_fraction),
-                    step=0.05,
-                )
-            else:
-                st.slider(
-                    "Neural validation fraction",
-                    min_value=0.10,
-                    max_value=0.40,
-                    value=float(neural_val_fraction),
-                    step=0.05,
-                    disabled=True,
-                )
-
-        with n7:
-            if neural_training_mode == "Research":
-                neural_patience = st.number_input(
-                    "Early-stopping patience",
-                    min_value=10,
-                    max_value=500,
-                    value=int(neural_patience),
-                    step=10,
-                )
-                neural_min_delta = 1e-3
-            else:
-                st.number_input(
-                    "Early-stopping patience",
-                    value=int(neural_patience),
-                    disabled=True,
-                )
-
-        st.caption(
-            f"Effective configuration: **{neural_training_mode}** · "
-            f"epochs={int(neural_epochs)} · hidden={int(neural_hidden)} · "
-            f"batch={int(neural_batch)} · lr={neural_lr:.0e} · "
-            f"validation={neural_val_fraction:.0%} · patience={int(neural_patience)}."
-        )
+            validation_fraction = 0.20
     else:
+        score_model = "None"
+        tuning_mode = "None"
+        validation_fraction = 0.20
+        m = 0
+        beta = float(DEFAULT_BETA)
+        n_steps = 100
         neural_training_mode = "Not used"
         neural_epochs = 100
         neural_hidden = 64
@@ -1047,32 +1010,13 @@ if estimator == "Diffusion":
         neural_patience = 30
         neural_min_delta = 1e-3
 
-    if tuning_mode == "Validation tuned":
-        validation_fraction = st.slider(
-            "Validation fraction",
-            min_value=0.10,
-            max_value=0.40,
-            value=0.20,
-            step=0.05,
-        )
-    else:
-        validation_fraction = 0.20
-else:
-    score_model = "None"
-    tuning_mode = "None"
-    validation_fraction = 0.20
-    m = 0
-    beta = float(DEFAULT_BETA)
-    n_steps = 100
-    neural_training_mode = "Not used"
-    neural_epochs = 100
-    neural_hidden = 64
-    neural_lr = 1e-3
-    neural_batch = 64
-    neural_val_fraction = 0.20
-    neural_patience = 30
-    neural_min_delta = 1e-3
 
+
+    run_analysis = st.form_submit_button(
+        "▶ Run portfolio analysis",
+        type="primary",
+        use_container_width=True,
+    )
 
 # ============================================================
 # Method-comparison studies moved to dedicated page
@@ -1123,14 +1067,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-run_col, stop_col, save_col, clear_col = st.columns([2, 1, 1, 1])
-
-with run_col:
-    run_analysis = st.button(
-        "▶ Run portfolio analysis",
-        type="primary",
-        use_container_width=True,
-    )
+stop_col, save_col, clear_col = st.columns([1, 1, 1])
 
 with stop_col:
     stop_analysis = st.button(
@@ -1190,7 +1127,7 @@ if save_analysis:
 
 if not st.session_state.get("analysis_has_run", False):
     st.info(
-        "Adjust the settings above, then click **Run portfolio analysis**. "
+        "Adjust the settings above. Changes are staged inside the form and are only applied when you click **Run portfolio analysis**. "
         "Use **Stop** to cancel/reset the active workflow and **Save** after results exist."
     )
     st.stop()
@@ -1501,11 +1438,6 @@ st.session_state["shared_current_window"] = {
     },
     "neural_training_result": neural_training_result,
 }
-
-# Any existing Section-D current-window snapshot was computed from an older
-# Portfolio state. Remove it immediately so Method Comparison cannot display
-# stale Neural-MV weights after a new Portfolio run.
-st.session_state.pop("mc_snapshot", None)
 
 st.subheader("Recommended Weights")
 st.dataframe(
