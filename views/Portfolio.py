@@ -1047,14 +1047,15 @@ if _restore_completed_portfolio:
         st.stop()
 
 # ============================================================
-# Integrated settings panel
+# Explicit run gate
 # ============================================================
-
-# CYAN RUN BUTTON
 st.markdown(
     """
     <style>
+    /* Normal primary buttons */
     div.stButton > button[kind="primary"],
+    
+    /* Primary buttons inside Streamlit forms */
     div.stFormSubmitButton > button[kind="primary"] {
         background-color: #00BCD4 !important;
         border-color: #00BCD4 !important;
@@ -1072,8 +1073,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-with st.form("portfolio_settings_form", clear_on_submit=False):   
-    stop_col, save_col, clear_col = st.columns([1, 1, 1])
+stop_col, save_col, clear_col = st.columns([1, 1, 1])
 
 with stop_col:
     stop_analysis = st.button(
