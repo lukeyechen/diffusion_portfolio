@@ -1838,10 +1838,31 @@ if (
             y="CER Neural - Historical",
             color="Model horizon",
             hover_data=["Realized date", "b*/n", "T source"],
-            trendline="lowess",
             title="Diffusion Horizon T vs Rolling Neural − Historical CER",
         )
         fig_t.add_hline(y=0.0, line_dash="dash", annotation_text="No Neural advantage")
+
+        # Optional fitted quadratic curve using NumPy only (no statsmodels dependency).
+        _t_fit = valid_e[["T", "CER Neural - Historical"]].dropna()
+        if len(_t_fit) >= 3 and _t_fit["T"].nunique() >= 3:
+            _coef_t = np.polyfit(
+                _t_fit["T"].to_numpy(dtype=float),
+                _t_fit["CER Neural - Historical"].to_numpy(dtype=float),
+                2,
+            )
+            _x_t = np.linspace(
+                float(_t_fit["T"].min()),
+                float(_t_fit["T"].max()),
+                200,
+            )
+            _y_t = np.polyval(_coef_t, _x_t)
+            fig_t.add_scatter(
+                x=_x_t,
+                y=_y_t,
+                mode="lines",
+                name="Quadratic fit",
+            )
+
         st.plotly_chart(fig_t, use_container_width=True)
 
         st.subheader("b*/n vs Neural CER Improvement")
@@ -1851,7 +1872,6 @@ if (
             y="CER Neural - Historical",
             color="Model horizon",
             hover_data=["Realized date", "T", "T source"],
-            trendline="lowess",
             title="b*/n vs Rolling Neural − Historical CER",
         )
         fig_b.add_vline(
@@ -1860,6 +1880,27 @@ if (
             annotation_text="Theoretical boundary b*/n = 1",
         )
         fig_b.add_hline(y=0.0, line_dash="dash", annotation_text="No Neural advantage")
+
+        _b_fit = valid_e[["b*/n", "CER Neural - Historical"]].dropna()
+        if len(_b_fit) >= 3 and _b_fit["b*/n"].nunique() >= 3:
+            _coef_b = np.polyfit(
+                _b_fit["b*/n"].to_numpy(dtype=float),
+                _b_fit["CER Neural - Historical"].to_numpy(dtype=float),
+                2,
+            )
+            _x_b = np.linspace(
+                float(_b_fit["b*/n"].min()),
+                float(_b_fit["b*/n"].max()),
+                200,
+            )
+            _y_b = np.polyval(_coef_b, _x_b)
+            fig_b.add_scatter(
+                x=_x_b,
+                y=_y_b,
+                mode="lines",
+                name="Quadratic fit",
+            )
+
         st.plotly_chart(fig_b, use_container_width=True)
 
         st.subheader("Quadratic Test for an Intermediate Diffusion Region")
