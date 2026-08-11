@@ -1047,15 +1047,14 @@ if _restore_completed_portfolio:
         st.stop()
 
 # ============================================================
-# Explicit run gate
+# Integrated settings panel
 # ============================================================
+
+# CYAN RUN BUTTON
 st.markdown(
     """
     <style>
-    /* Normal primary buttons */
     div.stButton > button[kind="primary"],
-    
-    /* Primary buttons inside Streamlit forms */
     div.stFormSubmitButton > button[kind="primary"] {
         background-color: #00BCD4 !important;
         border-color: #00BCD4 !important;
@@ -1072,6 +1071,9 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+with st.form("portfolio_settings_form", clear_on_submit=False):
+    st.markdown("### Portfolio / Diffusion Settings")
 
 stop_col, save_col, clear_col = st.columns([1, 1, 1])
 
