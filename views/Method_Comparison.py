@@ -620,6 +620,7 @@ def _build_method_comparison_export_zip(session_state):
                 ("multi_horizon_coverage.csv", "diagnostics"),
                 ("multi_horizon_t_source_performance.csv", "split_results"),
                 ("multi_horizon_regime_diagnostics.csv", "regime_results"),
+                ("multi_horizon_rolling_detail.csv", "detail"),
             ]:
                 df = multi.get(key)
                 if isinstance(df, pd.DataFrame):
@@ -639,6 +640,146 @@ def _build_method_comparison_export_zip(session_state):
                     "multi_horizon_cer_chart.html",
                     fig.to_html(full_html=True, include_plotlyjs="cdn"),
                 )
+
+        # ------------------------------------------------------------
+        # Section E: Diffusion Intensity vs Neural OOS Value
+        # ------------------------------------------------------------
+        if "mc_intensity_results" in session_state:
+            e_res = session_state["mc_intensity_results"]
+
+            e_table_map = {
+                "E_horizon_level_diffusion_intensity_and_CER_gain.csv": e_res.get("horizon_value"),
+                "E_rolling_diffusion_intensity_data.csv": e_res.get("intensity_df"),
+                "E_valid_rolling_CER_data.csv": e_res.get("valid_e"),
+                "E_quadratic_T_regression.csv": e_res.get("quad_table"),
+            }
+
+            for name, df in e_table_map.items():
+                if isinstance(df, pd.DataFrame):
+                    zf.writestr(name, df.to_csv(index=False))
+
+            valid_e = e_res.get("valid_e")
+            if isinstance(valid_e, pd.DataFrame) and not valid_e.empty:
+                # T vs CER gain
+                fig_t = px.scatter(
+                    valid_e,
+                    x="T",
+                    y="CER Neural - Historical",
+                    color="Model horizon",
+                    hover_data=["Realized date", "b*/n", "T source"],
+                    title="E. Diffusion Horizon T vs Rolling Neural - Historical CER",
+                )
+                fig_t.add_hline(
+                    y=0.0,
+                    line_dash="dash",
+                    annotation_text="No Neural advantage",
+                )
+
+                _t_fit = valid_e[["T", "CER Neural - Historical"]].dropna()
+                if len(_t_fit) >= 3 and _t_fit["T"].nunique() >= 3:
+                    _coef_t = np.polyfit(
+                        _t_fit["T"].to_numpy(dtype=float),
+                        _t_fit["CER Neural - Historical"].to_numpy(dtype=float),
+                        2,
+                    )
+                    _x_t = np.linspace(
+                        float(_t_fit["T"].min()),
+                        float(_t_fit["T"].max()),
+                        200,
+                    )
+                    _y_t = np.polyval(_coef_t, _x_t)
+                    fig_t.add_scatter(
+                        x=_x_t,
+                        y=_y_t,
+                        mode="lines",
+                        name="Quadratic fit",
+                    )
+
+                zf.writestr(
+                    "E_T_vs_neural_CER_improvement.html",
+                    fig_t.to_html(full_html=True, include_plotlyjs="cdn"),
+                )
+
+                # b*/n vs CER gain
+                fig_b = px.scatter(
+                    valid_e,
+                    x="b*/n",
+                    y="CER Neural - Historical",
+                    color="Model horizon",
+                    hover_data=["Realized date", "T", "T source"],
+                    title="E. b*/n vs Rolling Neural - Historical CER",
+                )
+                fig_b.add_vline(
+                    x=1.0,
+                    line_dash="dash",
+                    annotation_text="Theoretical boundary b*/n = 1",
+                )
+                fig_b.add_hline(
+                    y=0.0,
+                    line_dash="dash",
+                    annotation_text="No Neural advantage",
+                )
+
+                _b_fit = valid_e[["b*/n", "CER Neural - Historical"]].dropna()
+                if len(_b_fit) >= 3 and _b_fit["b*/n"].nunique() >= 3:
+                    _coef_b = np.polyfit(
+                        _b_fit["b*/n"].to_numpy(dtype=float),
+                        _b_fit["CER Neural - Historical"].to_numpy(dtype=float),
+                        2,
+                    )
+                    _x_b = np.linspace(
+                        float(_b_fit["b*/n"].min()),
+                        float(_b_fit["b*/n"].max()),
+                        200,
+                    )
+                    _y_b = np.polyval(_coef_b, _x_b)
+                    fig_b.add_scatter(
+                        x=_x_b,
+                        y=_y_b,
+                        mode="lines",
+                        name="Quadratic fit",
+                    )
+
+                zf.writestr(
+                    "E_bstar_n_vs_neural_CER_improvement.html",
+                    fig_b.to_html(full_html=True, include_plotlyjs="cdn"),
+                )
+
+            horizon_value = e_res.get("horizon_value")
+            if (
+                isinstance(horizon_value, pd.DataFrame)
+                and not horizon_value.empty
+                and "Neural CER - Historical CER" in horizon_value.columns
+            ):
+                fig_h = px.bar(
+                    horizon_value,
+                    x="Model horizon",
+                    y="Neural CER - Historical CER",
+                    title="E. Neural CER Gain over Historical by Model Horizon",
+                )
+                fig_h.add_hline(y=0.0, line_dash="dash")
+                zf.writestr(
+                    "E_horizon_level_neural_CER_gain.html",
+                    fig_h.to_html(full_html=True, include_plotlyjs="cdn"),
+                )
+
+            e_metadata = pd.DataFrame(
+                {
+                    "Field": [
+                        "Rolling CER window (months)",
+                        "Risk aversion gamma",
+                        "Quadratic regression R2",
+                        "Estimated empirical T optimum",
+                    ],
+                    "Value": [
+                        e_res.get("cer_window"),
+                        e_res.get("gamma"),
+                        e_res.get("quad_r2"),
+                        e_res.get("t_opt"),
+                    ],
+                }
+            )
+            zf.writestr("E_metadata.csv", e_metadata.to_csv(index=False))
 
         if "mc_snapshot" in session_state:
             snap = session_state["mc_snapshot"]
@@ -685,8 +826,9 @@ def _build_method_comparison_export_zip(session_state):
 
         zf.writestr(
             "README.txt",
-            "Method Comparison saved-results package.\n"
-            "CSV files reproduce the saved tables. HTML files contain interactive charts.\n",
+            "Method Comparison saved-results package for Sections A-E.\n"
+            "CSV files reproduce the saved tables. HTML files contain interactive charts.\n"
+            "Section E includes diffusion-intensity tables, quadratic regression, T optimum metadata, and charts.\n",
         )
 
     return buffer.getvalue()
