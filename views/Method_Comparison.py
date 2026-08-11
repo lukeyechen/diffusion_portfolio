@@ -101,6 +101,165 @@ def _cached_current_neural(
 
 
 
+
+def _build_section_a_export_zip(table):
+    """Export Section A: return-horizon theoretical study."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("A_return_horizon_study.csv", table.to_csv(index=False))
+
+        fig = px.bar(
+            table,
+            x="Horizon",
+            y="b*/n",
+            text_auto=".3f",
+            title="A. Theoretical feasibility ratio by return horizon",
+        )
+        fig.add_hline(y=1.0, line_dash="dash", annotation_text="b*/n = 1")
+        zf.writestr(
+            "A_return_horizon_study_chart.html",
+            fig.to_html(full_html=True, include_plotlyjs="cdn"),
+        )
+        zf.writestr(
+            "README.txt",
+            "Section A saved results: return-horizon theoretical feasibility table and chart.\n",
+        )
+    return buffer.getvalue()
+
+
+def _build_section_b_export_zip(res):
+    """Export Section B: selected-horizon rolling monthly OOS study."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        table_map = {
+            "B_oos_summary.csv": res.get("summary"),
+            "B_oos_detail.csv": res.get("detail"),
+            "B_oos_wealth.csv": res.get("wealth"),
+            "B_t_source_performance.csv": res.get("split_summary"),
+            "B_regime_summary.csv": res.get("regime_summary"),
+            "B_regime_detail.csv": res.get("regime_detail"),
+            "B_regression_table.csv": res.get("regression_table"),
+            "B_regression_diagnostics.csv": res.get("regression_diagnostics"),
+            "B_piecewise_slope_tests.csv": res.get("slope_tests"),
+            "B_relative_performance_data.csv": res.get("relative_df"),
+        }
+        for name, df in table_map.items():
+            if isinstance(df, pd.DataFrame):
+                zf.writestr(
+                    name,
+                    df.to_csv(index=(name == "B_oos_wealth.csv")),
+                )
+
+        wealth = res.get("wealth")
+        if isinstance(wealth, pd.DataFrame) and not wealth.empty:
+            wealth_plot = wealth.reset_index()
+            xcol = wealth_plot.columns[0]
+            fig = px.line(
+                wealth_plot,
+                x=xcol,
+                y=list(wealth.columns),
+                title=f"B. {res.get('horizon', '')} OOS cumulative wealth",
+            )
+            zf.writestr(
+                "B_oos_cumulative_wealth_chart.html",
+                fig.to_html(full_html=True, include_plotlyjs="cdn"),
+            )
+
+        rel = res.get("relative_df")
+        if isinstance(rel, pd.DataFrame) and not rel.empty:
+            scatter_data = make_threshold_scatter_data(rel)
+            scatter_long = pd.concat(
+                [
+                    scatter_data[
+                        ["Realized date", "b*/n", "T source", "Neural - Historical"]
+                    ]
+                    .rename(columns={"Neural - Historical": "Relative return"})
+                    .assign(Strategy="Neural - Historical"),
+                    scatter_data[
+                        ["Realized date", "b*/n", "T source", "Gaussian - Historical"]
+                    ]
+                    .rename(columns={"Gaussian - Historical": "Relative return"})
+                    .assign(Strategy="Gaussian - Historical"),
+                ],
+                ignore_index=True,
+            )
+            fig = px.scatter(
+                scatter_long,
+                x="b*/n",
+                y="Relative return",
+                color="Strategy",
+                symbol="T source",
+                hover_data=["Realized date"],
+                title="B. b*/n vs diffusion relative OOS performance",
+            )
+            fig.add_vline(x=1.0, line_dash="dash", annotation_text="b*/n = 1")
+            fig.add_hline(y=0.0, line_dash="dot")
+            zf.writestr(
+                "B_bstar_ratio_scatter.html",
+                fig.to_html(full_html=True, include_plotlyjs="cdn"),
+            )
+
+        metadata = pd.DataFrame(
+            {
+                "Field": ["Horizon", "Speed mode", "Effective OOS periods"],
+                "Value": [
+                    res.get("horizon"),
+                    res.get("speed_mode"),
+                    res.get("effective_oos_periods"),
+                ],
+            }
+        )
+        zf.writestr("B_metadata.csv", metadata.to_csv(index=False))
+        zf.writestr(
+            "README.txt",
+            "Section B saved results: selected-horizon monthly OOS tables, diagnostics, regressions, and charts.\n",
+        )
+    return buffer.getvalue()
+
+
+def _build_section_c_export_zip(multi):
+    """Export Section C: 3M/6M/12M multi-horizon research study."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        table_map = {
+            "C_multi_horizon_oos_performance.csv": multi.get("results"),
+            "C_multi_horizon_coverage.csv": multi.get("diagnostics"),
+            "C_multi_horizon_t_source_performance.csv": multi.get("split_results"),
+            "C_multi_horizon_regime_diagnostics.csv": multi.get("regime_results"),
+        }
+        for name, df in table_map.items():
+            if isinstance(df, pd.DataFrame):
+                zf.writestr(name, df.to_csv(index=False))
+
+        df = multi.get("results")
+        if isinstance(df, pd.DataFrame) and not df.empty:
+            fig = px.bar(
+                df,
+                x="Model horizon",
+                y="CER / month",
+                color="Method",
+                barmode="group",
+                title="C. Monthly OOS CER by model horizon and method",
+            )
+            zf.writestr(
+                "C_multi_horizon_cer_chart.html",
+                fig.to_html(full_html=True, include_plotlyjs="cdn"),
+            )
+
+        metadata = pd.DataFrame(
+            {
+                "Field": ["Speed mode", "Effective OOS periods per horizon"],
+                "Value": [multi.get("mode"), multi.get("effective_oos_periods")],
+            }
+        )
+        zf.writestr("C_metadata.csv", metadata.to_csv(index=False))
+        zf.writestr(
+            "README.txt",
+            "Section C saved results: 3M/6M/12M OOS comparison tables, diagnostics, and chart.\n",
+        )
+    return buffer.getvalue()
+
+
 def _build_section_d_export_zip(snap):
     """Export only the Current-Window Estimator / Portfolio-Rule comparison."""
     buffer = io.BytesIO()
@@ -753,6 +912,28 @@ st.caption(
     "Compares theoretical diffusion feasibility across 1M, 3M, 6M, and 12M returns."
 )
 
+_a_save_col, _a_download_col = st.columns([1, 2])
+with _a_save_col:
+    if st.button("💾 Save A results", key="save_section_a", use_container_width=True):
+        if "mc_horizon_table" not in st.session_state:
+            st.warning("Run Section A first, then save the results.")
+        else:
+            st.session_state["section_a_saved_zip"] = _build_section_a_export_zip(
+                st.session_state["mc_horizon_table"]
+            )
+            st.success("Section A results package prepared.")
+
+with _a_download_col:
+    if "section_a_saved_zip" in st.session_state:
+        st.download_button(
+            "⬇ Download A results (.zip)",
+            data=st.session_state["section_a_saved_zip"],
+            file_name="section_A_return_horizon_study.zip",
+            mime="application/zip",
+            key="download_section_a",
+            use_container_width=True,
+        )
+
 if st.button(
     "Run Return-Horizon Study",
     type="primary",
@@ -772,6 +953,7 @@ if st.button(
                     "12M": download_yahoo_horizon_returns(ticker_list, start_date, 12),
                 }
                 table = return_horizon_study(horizon_data, beta=float(beta))
+            st.session_state.pop("section_a_saved_zip", None)
             st.session_state["mc_horizon_table"] = table
         except Exception as exc:
             st.error(f"Return-horizon study failed: {exc}")
@@ -816,6 +998,28 @@ st.caption(
     "Historical, Gaussian Diffusion, and Neural Diffusion are re-estimated through "
     "time and evaluated on the same next real monthly return."
 )
+
+_b_save_col, _b_download_col = st.columns([1, 2])
+with _b_save_col:
+    if st.button("💾 Save B results", key="save_section_b", use_container_width=True):
+        if "mc_selected_results" not in st.session_state:
+            st.warning("Run Section B first, then save the results.")
+        else:
+            st.session_state["section_b_saved_zip"] = _build_section_b_export_zip(
+                st.session_state["mc_selected_results"]
+            )
+            st.success("Section B results package prepared.")
+
+with _b_download_col:
+    if "section_b_saved_zip" in st.session_state:
+        st.download_button(
+            "⬇ Download B results (.zip)",
+            data=st.session_state["section_b_saved_zip"],
+            file_name="section_B_selected_horizon_OOS.zip",
+            mime="application/zip",
+            key="download_section_b",
+            use_container_width=True,
+        )
 
 _bmode1, _bmode2 = st.columns([1, 2])
 with _bmode1:
@@ -931,6 +1135,7 @@ if st.button(
 
         progress.progress(100, text="Selected-horizon comparison complete.")
 
+        st.session_state.pop("section_b_saved_zip", None)
         st.session_state["mc_selected_results"] = {
             "horizon": model_horizon,
             "speed_mode": b_speed_mode,
@@ -1042,91 +1247,71 @@ if "mc_selected_results" in st.session_state:
     )
 
     # ------------------------------------------------------------
-# Regression view selector
-# ------------------------------------------------------------
+    # Regression view selector
+    # ------------------------------------------------------------
 
-# Persistent selections
-if "mc_reg_spec" not in st.session_state:
-    st.session_state["mc_reg_spec"] = "Piecewise at 1"
+    # Persistent selections.  These values control the table that is displayed.
+    if "mc_reg_spec" not in st.session_state:
+        st.session_state["mc_reg_spec"] = "Piecewise at 1"
 
-if "mc_reg_strategy" not in st.session_state:
-    st.session_state["mc_reg_strategy"] = "Neural - Historical"
+    if "mc_reg_strategy" not in st.session_state:
+        st.session_state["mc_reg_strategy"] = "Neural - Historical"
 
-with st.form("mc_regression_view_form", clear_on_submit=False):
+    with st.form("mc_regression_view_form", clear_on_submit=False):
+        a, b = st.columns(2)
 
-    a, b = st.columns(2)
+        with a:
+            selected_spec_form = st.radio(
+                "Regression specification",
+                [
+                    "Piecewise at 1",
+                    "Continuous b*/n",
+                    "Binary feasibility",
+                ],
+                index=[
+                    "Piecewise at 1",
+                    "Continuous b*/n",
+                    "Binary feasibility",
+                ].index(st.session_state["mc_reg_spec"]),
+                key="mc_reg_spec_form",
+            )
 
-    with a:
-        selected_spec_form = st.radio(
-            "Regression specification",
-            [
-                "Piecewise at 1",
-                "Continuous b*/n",
-                "Binary feasibility",
-            ],
-            index=[
-                "Piecewise at 1",
-                "Continuous b*/n",
-                "Binary feasibility",
-            ].index(st.session_state["mc_reg_spec"]),
-            key="mc_reg_spec_form",
+        with b:
+            selected_strategy_form = st.radio(
+                "Relative strategy",
+                [
+                    "Neural - Historical",
+                    "Gaussian - Historical",
+                ],
+                index=[
+                    "Neural - Historical",
+                    "Gaussian - Historical",
+                ].index(st.session_state["mc_reg_strategy"]),
+                key="mc_reg_strategy_form",
+            )
+
+        apply_view = st.form_submit_button(
+            "Apply regression view",
+            use_container_width=True,
         )
 
-    with b:
-        selected_strategy_form = st.radio(
-            "Relative strategy",
-            [
-                "Neural - Historical",
-                "Gaussian - Historical",
-            ],
-            index=[
-                "Neural - Historical",
-                "Gaussian - Historical",
-            ].index(st.session_state["mc_reg_strategy"]),
-            key="mc_reg_strategy_form",
-        )
+    if apply_view:
+        st.session_state["mc_reg_spec"] = selected_spec_form
+        st.session_state["mc_reg_strategy"] = selected_strategy_form
+        # Force one immediate rerun so the table below uses the newly applied
+        # radio selections on the very next render (one click only).
+        st.rerun()
 
-    apply_view = st.form_submit_button(
-        "Apply regression view",
-        use_container_width=True,
-    )
+    reg_spec = st.session_state["mc_reg_spec"]
+    reg_strategy = st.session_state["mc_reg_strategy"]
 
+    reg_view = res["regression_table"][
+        (res["regression_table"]["Specification"] == reg_spec)
+        & (res["regression_table"]["Relative strategy"] == reg_strategy)
+    ].copy()
 
-if apply_view:
-
-    st.session_state["mc_reg_spec"] = selected_spec_form
-    st.session_state["mc_reg_strategy"] = selected_strategy_form
-
-    # Important:
-    # immediately rerun so tables below use the new selections
-    st.rerun()
-
-reg_spec = st.session_state["mc_reg_spec"]
-reg_strategy = st.session_state["mc_reg_strategy"]
-
-reg_view = res["regression_table"][
-    (res["regression_table"]["Specification"] == reg_spec)
-    & (res["regression_table"]["Relative strategy"] == reg_strategy)
-].copy()
-
-st.markdown(f"**{reg_spec} — {reg_strategy}**")
-st.dataframe(
-    reg_view[
-        ["Variable", "Coefficient", "Robust SE", "t-stat", "p-value"]
-    ].style.format(
-        {
-            "Coefficient": "{:.6f}",
-            "Robust SE": "{:.6f}",
-            "t-stat": "{:.3f}",
-            "p-value": "{:.4f}",
-        }
-    ),
-    use_container_width=True,
-    hide_index=True,
-)
-
-st.markdown(f"**{reg_spec} — {reg_strategy}**")
-st.dataframe(
+    st.markdown(f"**{reg_spec} — {reg_strategy}**")
+    st.dataframe(
         reg_view[
             ["Variable", "Coefficient", "Robust SE", "t-stat", "p-value"]
         ].style.format(
@@ -1144,6 +1329,7 @@ st.dataframe(
     slope_view = res["slope_tests"][
         res["slope_tests"]["Relative strategy"] == reg_strategy
     ].copy()
+
     st.markdown("**Direct piecewise slope tests**")
     st.dataframe(
         slope_view.style.format(
@@ -1176,6 +1362,7 @@ st.dataframe(
         ],
         ignore_index=True,
     )
+
     fig = px.scatter(
         scatter_long,
         x="b*/n",
@@ -1203,6 +1390,28 @@ st.caption(
     "Runs the same monthly OOS framework for all three model horizons. "
     "This is intentionally separated from the Portfolio page because it is computationally expensive."
 )
+
+_c_save_col, _c_download_col = st.columns([1, 2])
+with _c_save_col:
+    if st.button("💾 Save C results", key="save_section_c", use_container_width=True):
+        if "mc_multi_results" not in st.session_state:
+            st.warning("Run Section C first, then save the results.")
+        else:
+            st.session_state["section_c_saved_zip"] = _build_section_c_export_zip(
+                st.session_state["mc_multi_results"]
+            )
+            st.success("Section C results package prepared.")
+
+with _c_download_col:
+    if "section_c_saved_zip" in st.session_state:
+        st.download_button(
+            "⬇ Download C results (.zip)",
+            data=st.session_state["section_c_saved_zip"],
+            file_name="section_C_multi_horizon_research.zip",
+            mime="application/zip",
+            key="download_section_c",
+            use_container_width=True,
+        )
 
 study_mode = st.radio(
     "Horizon-study speed",
@@ -1344,6 +1553,7 @@ if st.button(
             split_results = pd.concat(all_split, ignore_index=True)
             regime_results = pd.concat(all_regime, ignore_index=True)
 
+            st.session_state.pop("section_c_saved_zip", None)
             st.session_state["mc_multi_results"] = {
                 "mode": study_mode,
                 "effective_oos_periods": study_oos_periods,
@@ -1431,12 +1641,12 @@ _dsave1, _dsave2, _dsave3 = st.columns([1, 1, 2])
 
 with _dsave1:
     if st.button(
-        "💾 Save Section D",
+        "💾 Save D results",
         key="save_section_d",
         use_container_width=True,
     ):
         if "mc_snapshot" not in st.session_state:
-            st.warning("Run Section D first, then click Save Section D.")
+            st.warning("Run Section D first, then save the results.")
         else:
             try:
                 st.session_state["section_d_saved_zip"] = _build_section_d_export_zip(
@@ -1459,7 +1669,7 @@ with _dsave2:
 with _dsave3:
     if "section_d_saved_zip" in st.session_state:
         st.download_button(
-            "⬇ Download Section D tables + charts (.zip)",
+            "⬇ Download D results (.zip)",
             data=st.session_state["section_d_saved_zip"],
             file_name="section_D_current_window_comparison.zip",
             mime="application/zip",
