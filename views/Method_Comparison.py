@@ -1041,42 +1041,69 @@ if "mc_selected_results" in st.session_state:
         hide_index=True,
     )
 
-    with st.form("mc_regression_view_form", clear_on_submit=False):
-        a, b = st.columns(2)
-        with a:
-            selected_spec_form = st.radio(
-                "Regression specification",
-                ["Piecewise at 1", "Continuous b*/n", "Binary feasibility"],
-                index=[
-                    "Piecewise at 1",
-                    "Continuous b*/n",
-                    "Binary feasibility",
-                ].index(
-                    st.session_state.get("mc_reg_spec", "Piecewise at 1")
-                ),
-            )
-        with b:
-            selected_strategy_form = st.radio(
-                "Relative strategy",
-                ["Neural - Historical", "Gaussian - Historical"],
-                index=[
-                    "Neural - Historical",
-                    "Gaussian - Historical",
-                ].index(
-                    st.session_state.get("mc_reg_strategy", "Neural - Historical")
-                ),
-            )
-        apply_view = st.form_submit_button(
-            "Apply regression view",
-            use_container_width=True,
+    # ------------------------------------------------------------
+# Regression view selector
+# ------------------------------------------------------------
+
+# Persistent selections
+if "mc_reg_spec" not in st.session_state:
+    st.session_state["mc_reg_spec"] = "Piecewise at 1"
+
+if "mc_reg_strategy" not in st.session_state:
+    st.session_state["mc_reg_strategy"] = "Neural - Historical"
+
+with st.form("mc_regression_view_form", clear_on_submit=False):
+
+    a, b = st.columns(2)
+
+    with a:
+        selected_spec_form = st.radio(
+            "Regression specification",
+            [
+                "Piecewise at 1",
+                "Continuous b*/n",
+                "Binary feasibility",
+            ],
+            index=[
+                "Piecewise at 1",
+                "Continuous b*/n",
+                "Binary feasibility",
+            ].index(st.session_state["mc_reg_spec"]),
+            key="mc_reg_spec_form",
         )
 
-    if apply_view:
-        st.session_state["mc_reg_spec"] = selected_spec_form
-        st.session_state["mc_reg_strategy"] = selected_strategy_form
+    with b:
+        selected_strategy_form = st.radio(
+            "Relative strategy",
+            [
+                "Neural - Historical",
+                "Gaussian - Historical",
+            ],
+            index=[
+                "Neural - Historical",
+                "Gaussian - Historical",
+            ].index(st.session_state["mc_reg_strategy"]),
+            key="mc_reg_strategy_form",
+        )
 
-    reg_spec = st.session_state.get("mc_reg_spec", "Piecewise at 1")
-    reg_strategy = st.session_state.get("mc_reg_strategy", "Neural - Historical")
+    apply_view = st.form_submit_button(
+        "Apply regression view",
+        use_container_width=True,
+    )
+
+
+if apply_view:
+
+    st.session_state["mc_reg_spec"] = selected_spec_form
+    st.session_state["mc_reg_strategy"] = selected_strategy_form
+
+    # Important:
+    # immediately rerun so tables below use the new selections
+    st.rerun()
+
+
+reg_spec = st.session_state["mc_reg_spec"]
+reg_strategy = st.session_state["mc_reg_strategy"]
 
     reg_view = res["regression_table"][
         (res["regression_table"]["Specification"] == reg_spec)
