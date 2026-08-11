@@ -1072,9 +1072,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-with st.form("portfolio_settings_form", clear_on_submit=False):
-   
-stop_col, save_col, clear_col = st.columns([1, 1, 1])
+with st.form("portfolio_settings_form", clear_on_submit=False):   
+    stop_col, save_col, clear_col = st.columns([1, 1, 1])
 
 with stop_col:
     stop_analysis = st.button(
