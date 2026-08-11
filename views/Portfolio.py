@@ -211,7 +211,7 @@ _saved_source = _saved_portfolio.get(
     "source",
     st.session_state.get("returns_source", "Upload CSV"),
 )
-_source_options = ["Upload CSV", "Yahoo Finance"]
+_source_options = ["Yahoo Finance", "Upload CSV"]
 _source_index = (
     _source_options.index(_saved_source)
     if _saved_source in _source_options
@@ -219,7 +219,7 @@ _source_index = (
 )
 
 source = st.radio(
-    "Data source",
+    "Yahoo Finance",
     _source_options,
     horizontal=True,
     index=_source_index,
@@ -277,7 +277,7 @@ else:
     _saved_start = str(
         _saved_signature.get(
             "start",
-            st.session_state.get("start_date", "2021-01-01"),
+            st.session_state.get("start_date", "2000-01-01"),
         )
     )
     _interval_options = [
@@ -290,7 +290,7 @@ else:
     ]
     _saved_interval = _saved_signature.get(
         "interval_label",
-        _saved_portfolio.get("interval_label", "1 month"),
+        _saved_portfolio.get("interval_label", "1 year"),
     )
     _interval_index = (
         _interval_options.index(_saved_interval)
