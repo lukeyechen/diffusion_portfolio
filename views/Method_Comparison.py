@@ -261,6 +261,157 @@ def _build_section_c_export_zip(multi):
     return buffer.getvalue()
 
 
+
+def _build_section_e_export_zip(e_res):
+    """Export Section E: diffusion intensity vs Neural OOS value."""
+    buffer = io.BytesIO()
+
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        table_map = {
+            "E_horizon_level_diffusion_intensity_and_CER_gain.csv": e_res.get("horizon_value"),
+            "E_rolling_diffusion_intensity_data.csv": e_res.get("intensity_df"),
+            "E_valid_rolling_CER_data.csv": e_res.get("valid_e"),
+            "E_quadratic_T_regression.csv": e_res.get("quad_table"),
+        }
+
+        for name, df in table_map.items():
+            if isinstance(df, pd.DataFrame):
+                zf.writestr(name, df.to_csv(index=False))
+
+        # T vs rolling Neural-Historical CER chart
+        valid_e = e_res.get("valid_e")
+        if isinstance(valid_e, pd.DataFrame) and not valid_e.empty:
+            fig_t = px.scatter(
+                valid_e,
+                x="T",
+                y="CER Neural - Historical",
+                color="Model horizon",
+                hover_data=["Realized date", "b*/n", "T source"],
+                title="E. Diffusion Horizon T vs Rolling Neural - Historical CER",
+            )
+            fig_t.add_hline(
+                y=0.0,
+                line_dash="dash",
+                annotation_text="No Neural advantage",
+            )
+
+            _t_fit = valid_e[["T", "CER Neural - Historical"]].dropna()
+            if len(_t_fit) >= 3 and _t_fit["T"].nunique() >= 3:
+                _coef_t = np.polyfit(
+                    _t_fit["T"].to_numpy(dtype=float),
+                    _t_fit["CER Neural - Historical"].to_numpy(dtype=float),
+                    2,
+                )
+                _x_t = np.linspace(
+                    float(_t_fit["T"].min()),
+                    float(_t_fit["T"].max()),
+                    200,
+                )
+                _y_t = np.polyval(_coef_t, _x_t)
+                fig_t.add_scatter(
+                    x=_x_t,
+                    y=_y_t,
+                    mode="lines",
+                    name="Quadratic fit",
+                )
+
+            zf.writestr(
+                "E_T_vs_neural_CER_improvement.html",
+                fig_t.to_html(full_html=True, include_plotlyjs="cdn"),
+            )
+
+            # b*/n chart
+            fig_b = px.scatter(
+                valid_e,
+                x="b*/n",
+                y="CER Neural - Historical",
+                color="Model horizon",
+                hover_data=["Realized date", "T", "T source"],
+                title="E. b*/n vs Rolling Neural - Historical CER",
+            )
+            fig_b.add_vline(
+                x=1.0,
+                line_dash="dash",
+                annotation_text="Theoretical boundary b*/n = 1",
+            )
+            fig_b.add_hline(
+                y=0.0,
+                line_dash="dash",
+                annotation_text="No Neural advantage",
+            )
+
+            _b_fit = valid_e[["b*/n", "CER Neural - Historical"]].dropna()
+            if len(_b_fit) >= 3 and _b_fit["b*/n"].nunique() >= 3:
+                _coef_b = np.polyfit(
+                    _b_fit["b*/n"].to_numpy(dtype=float),
+                    _b_fit["CER Neural - Historical"].to_numpy(dtype=float),
+                    2,
+                )
+                _x_b = np.linspace(
+                    float(_b_fit["b*/n"].min()),
+                    float(_b_fit["b*/n"].max()),
+                    200,
+                )
+                _y_b = np.polyval(_coef_b, _x_b)
+                fig_b.add_scatter(
+                    x=_x_b,
+                    y=_y_b,
+                    mode="lines",
+                    name="Quadratic fit",
+                )
+
+            zf.writestr(
+                "E_bstar_n_vs_neural_CER_improvement.html",
+                fig_b.to_html(full_html=True, include_plotlyjs="cdn"),
+            )
+
+        # Horizon-level chart
+        horizon_value = e_res.get("horizon_value")
+        if (
+            isinstance(horizon_value, pd.DataFrame)
+            and not horizon_value.empty
+            and "Neural CER - Historical CER" in horizon_value.columns
+        ):
+            fig_h = px.bar(
+                horizon_value,
+                x="Model horizon",
+                y="Neural CER - Historical CER",
+                title="E. Neural CER Gain over Historical by Model Horizon",
+            )
+            fig_h.add_hline(y=0.0, line_dash="dash")
+            zf.writestr(
+                "E_horizon_level_neural_CER_gain.html",
+                fig_h.to_html(full_html=True, include_plotlyjs="cdn"),
+            )
+
+        metadata = pd.DataFrame(
+            {
+                "Field": [
+                    "Rolling CER window (months)",
+                    "Risk aversion gamma",
+                    "Quadratic regression R2",
+                    "Estimated empirical T optimum",
+                ],
+                "Value": [
+                    e_res.get("cer_window"),
+                    e_res.get("gamma"),
+                    e_res.get("quad_r2"),
+                    e_res.get("t_opt"),
+                ],
+            }
+        )
+        zf.writestr("E_metadata.csv", metadata.to_csv(index=False))
+
+        zf.writestr(
+            "README.txt",
+            "Section E saved results package.\n"
+            "Contains the horizon-level CER-gain table, rolling T and b*/n intensity data, "
+            "quadratic T regression, metadata, and interactive HTML charts.\n",
+        )
+
+    return buffer.getvalue()
+
+
 def _build_section_d_export_zip(snap):
     """Export only the Current-Window Estimator / Portfolio-Rule comparison."""
     buffer = io.BytesIO()
@@ -1665,6 +1816,8 @@ if st.button(
             detail_results = pd.concat(all_detail, ignore_index=True)
 
             st.session_state.pop("section_c_saved_zip", None)
+            st.session_state.pop("section_e_saved_zip", None)
+            st.session_state.pop("mc_intensity_results", None)
             st.session_state["mc_multi_results"] = {
                 "mode": study_mode,
                 "effective_oos_periods": study_oos_periods,
@@ -1754,6 +1907,37 @@ st.caption(
     "it provides the greatest out-of-sample value relative to Historical estimation."
 )
 
+
+_e_save_col, _e_download_col = st.columns([1, 2])
+
+with _e_save_col:
+    if st.button(
+        "💾 Save E results",
+        key="save_section_e",
+        use_container_width=True,
+    ):
+        if "mc_intensity_results" not in st.session_state:
+            st.warning("Run Section C first so Section E can build its results, then save E.")
+        else:
+            try:
+                st.session_state["section_e_saved_zip"] = _build_section_e_export_zip(
+                    st.session_state["mc_intensity_results"]
+                )
+                st.success("Section E results package prepared.")
+            except Exception as exc:
+                st.error(f"Could not save Section E results: {exc}")
+
+with _e_download_col:
+    if "section_e_saved_zip" in st.session_state:
+        st.download_button(
+            "⬇ Download E tables + charts (.zip)",
+            data=st.session_state["section_e_saved_zip"],
+            file_name="section_E_diffusion_intensity_research.zip",
+            mime="application/zip",
+            key="download_section_e",
+            use_container_width=True,
+        )
+
 if (
     "mc_multi_results" in st.session_state
     and isinstance(st.session_state["mc_multi_results"].get("detail"), pd.DataFrame)
@@ -1830,6 +2014,18 @@ if (
         hide_index=True,
     )
 
+    # Persist Section E independently so the tables/charts can be saved after reruns/navigation.
+    st.session_state["mc_intensity_results"] = {
+        "cer_window": int(cer_window),
+        "gamma": float(gamma),
+        "horizon_value": horizon_value.copy(),
+        "intensity_df": intensity_df.copy(),
+        "valid_e": valid_e.copy(),
+        "quad_table": pd.DataFrame(),
+        "t_opt": np.nan,
+        "quad_r2": np.nan,
+    }
+
     if len(valid_e) >= 3:
         st.subheader("T vs Neural CER Improvement")
         fig_t = px.scatter(
@@ -1905,6 +2101,14 @@ if (
 
         st.subheader("Quadratic Test for an Intermediate Diffusion Region")
         quad_table, t_opt, quad_r2 = _quadratic_intensity_regression(valid_e)
+
+        st.session_state["mc_intensity_results"].update(
+            {
+                "quad_table": quad_table.copy(),
+                "t_opt": float(t_opt) if np.isfinite(t_opt) else np.nan,
+                "quad_r2": float(quad_r2) if np.isfinite(quad_r2) else np.nan,
+            }
+        )
 
         if not quad_table.empty:
             st.dataframe(
