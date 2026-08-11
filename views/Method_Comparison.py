@@ -1125,8 +1125,8 @@ st.dataframe(
     hide_index=True,
 )
 
-    st.markdown(f"**{reg_spec} — {reg_strategy}**")
-    st.dataframe(
+st.markdown(f"**{reg_spec} — {reg_strategy}**")
+st.dataframe(
         reg_view[
             ["Variable", "Coefficient", "Robust SE", "t-stat", "p-value"]
         ].style.format(
