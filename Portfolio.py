@@ -687,7 +687,7 @@ with st.form("portfolio_settings_form", clear_on_submit=False):
         if constraint_mode == "Long-only":
             min_feasible_weight = 1.0 / n_assets
             default_cap = max(float(_saved_portfolio.get("max_long_weight", DEFAULT_MAX_LONG_WEIGHT)), min_feasible_weight)
-            max_long_weight = st.slider(
+            max_long_weight = st.number_input(
                 "Maximum weight per asset",
                 min_value=float(min_feasible_weight),
                 max_value=1.0,
@@ -696,24 +696,26 @@ with st.form("portfolio_settings_form", clear_on_submit=False):
                 format="%.2f",
             )
         elif constraint_mode == "Limited Long-Short":
-            max_long_weight = st.slider(
+            max_long_weight = st.number_input(
                 "Maximum long weight per asset",
                 min_value=0.05,
                 max_value=1.0,
                 value=float(_saved_portfolio.get("max_long_weight", DEFAULT_MAX_LONG_WEIGHT)),
                 step=0.05,
+                format="%.2f",
             )
         else:
             st.caption("No long-weight cap in unconstrained mode.")
 
     with r2c2:
         if constraint_mode == "Limited Long-Short":
-            max_short_weight = st.slider(
+            max_short_weight = st.number_input(
                 "Maximum short weight per asset",
                 min_value=0.0,
                 max_value=1.0,
                 value=float(_saved_portfolio.get("max_short_weight", DEFAULT_MAX_SHORT_WEIGHT)),
                 step=0.05,
+                format="%.2f",
             )
         else:
             st.number_input(
@@ -724,12 +726,13 @@ with st.form("portfolio_settings_form", clear_on_submit=False):
 
     with r2c3:
         if constraint_mode == "Limited Long-Short":
-            max_gross_exposure = st.slider(
+            max_gross_exposure = st.number_input(
                 "Maximum gross exposure",
                 min_value=1.0,
                 max_value=3.0,
                 value=float(_saved_portfolio.get("max_gross_exposure", DEFAULT_MAX_GROSS_EXPOSURE)),
-                step=0.1,
+                step=0.10,
+                format="%.2f",
             )
         else:
             st.number_input(
