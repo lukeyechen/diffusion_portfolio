@@ -529,40 +529,51 @@ def _build_method_comparison_export_zip(session_state):
     buffer = io.BytesIO()
 
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        # ------------------------------------------------------------
+        # Section A: Return-Horizon Study
+        # ------------------------------------------------------------
         if "mc_horizon_table" in session_state:
             df = session_state["mc_horizon_table"]
-            zf.writestr("return_horizon_study.csv", df.to_csv(index=False))
+            zf.writestr("A_return_horizon_study.csv", df.to_csv(index=False))
 
             fig = px.bar(
                 df,
                 x="Horizon",
                 y="b*/n",
                 text_auto=".3f",
-                title="Theoretical feasibility ratio by return horizon",
+                title="A. Theoretical feasibility ratio by return horizon",
             )
             fig.add_hline(y=1.0, line_dash="dash", annotation_text="b*/n = 1")
             zf.writestr(
-                "return_horizon_study_chart.html",
+                "A_return_horizon_study_chart.html",
                 fig.to_html(full_html=True, include_plotlyjs="cdn"),
             )
 
+        # ------------------------------------------------------------
+        # Section B: Selected-Horizon Monthly OOS Comparison
+        # ------------------------------------------------------------
         if "mc_selected_results" in session_state:
             res = session_state["mc_selected_results"]
-            table_map = {
-                "selected_oos_summary.csv": res.get("summary"),
-                "selected_oos_detail.csv": res.get("detail"),
-                "selected_oos_wealth.csv": res.get("wealth"),
-                "selected_t_source_performance.csv": res.get("split_summary"),
-                "selected_regime_summary.csv": res.get("regime_summary"),
-                "selected_regime_detail.csv": res.get("regime_detail"),
-                "selected_regression_table.csv": res.get("regression_table"),
-                "selected_regression_diagnostics.csv": res.get("regression_diagnostics"),
-                "selected_piecewise_slope_tests.csv": res.get("slope_tests"),
-                "selected_relative_performance_data.csv": res.get("relative_df"),
+
+            b_table_map = {
+                "B_oos_summary.csv": res.get("summary"),
+                "B_oos_detail.csv": res.get("detail"),
+                "B_oos_wealth.csv": res.get("wealth"),
+                "B_t_source_performance.csv": res.get("split_summary"),
+                "B_regime_summary.csv": res.get("regime_summary"),
+                "B_regime_detail.csv": res.get("regime_detail"),
+                "B_regression_table.csv": res.get("regression_table"),
+                "B_regression_diagnostics.csv": res.get("regression_diagnostics"),
+                "B_piecewise_slope_tests.csv": res.get("slope_tests"),
+                "B_relative_performance_data.csv": res.get("relative_df"),
             }
-            for name, df in table_map.items():
+
+            for name, df in b_table_map.items():
                 if isinstance(df, pd.DataFrame):
-                    zf.writestr(name, df.to_csv(index=True if name == "selected_oos_wealth.csv" else False))
+                    zf.writestr(
+                        name,
+                        df.to_csv(index=(name == "B_oos_wealth.csv")),
+                    )
 
             wealth = res.get("wealth")
             if isinstance(wealth, pd.DataFrame) and not wealth.empty:
@@ -572,10 +583,10 @@ def _build_method_comparison_export_zip(session_state):
                     wealth_plot,
                     x=xcol,
                     y=list(wealth.columns),
-                    title=f"{res.get('horizon', '')} OOS cumulative wealth",
+                    title=f"B. {res.get('horizon', '')} OOS cumulative wealth",
                 )
                 zf.writestr(
-                    "selected_oos_cumulative_wealth_chart.html",
+                    "B_oos_cumulative_wealth_chart.html",
                     fig.to_html(full_html=True, include_plotlyjs="cdn"),
                 )
 
@@ -586,17 +597,18 @@ def _build_method_comparison_export_zip(session_state):
                     [
                         scatter_data[
                             ["Realized date", "b*/n", "T source", "Neural - Historical"]
-                        ].rename(columns={"Neural - Historical": "Relative return"}).assign(
-                            Strategy="Neural - Historical"
-                        ),
+                        ]
+                        .rename(columns={"Neural - Historical": "Relative return"})
+                        .assign(Strategy="Neural - Historical"),
                         scatter_data[
                             ["Realized date", "b*/n", "T source", "Gaussian - Historical"]
-                        ].rename(columns={"Gaussian - Historical": "Relative return"}).assign(
-                            Strategy="Gaussian - Historical"
-                        ),
+                        ]
+                        .rename(columns={"Gaussian - Historical": "Relative return"})
+                        .assign(Strategy="Gaussian - Historical"),
                     ],
                     ignore_index=True,
                 )
+
                 fig = px.scatter(
                     scatter_long,
                     x="b*/n",
@@ -604,14 +616,30 @@ def _build_method_comparison_export_zip(session_state):
                     color="Strategy",
                     symbol="T source",
                     hover_data=["Realized date"],
-                    title="b*/n vs diffusion relative OOS performance",
+                    title="B. b*/n vs diffusion relative OOS performance",
                 )
                 fig.add_vline(x=1.0, line_dash="dash", annotation_text="b*/n = 1")
                 fig.add_hline(y=0.0, line_dash="dot")
                 zf.writestr(
-                    "selected_bstar_ratio_scatter.html",
+                    "B_bstar_ratio_scatter.html",
                     fig.to_html(full_html=True, include_plotlyjs="cdn"),
                 )
+
+            b_metadata = pd.DataFrame(
+                {
+                    "Field": [
+                        "Horizon",
+                        "Speed mode",
+                        "Effective OOS periods",
+                    ],
+                    "Value": [
+                        res.get("horizon"),
+                        res.get("speed_mode"),
+                        res.get("effective_oos_periods"),
+                    ],
+                }
+            )
+            zf.writestr("B_metadata.csv", b_metadata.to_csv(index=False))
 
         if "mc_multi_results" in session_state:
             multi = session_state["mc_multi_results"]
@@ -781,52 +809,108 @@ def _build_method_comparison_export_zip(session_state):
             )
             zf.writestr("E_metadata.csv", e_metadata.to_csv(index=False))
 
+        # ------------------------------------------------------------
+        # Section D: Current-window estimator / portfolio-rule comparison
+        # ------------------------------------------------------------
         if "mc_snapshot" in session_state:
             snap = session_state["mc_snapshot"]
-            for name, key in [
-                ("current_window_estimator_based_metrics.csv", "snapshot"),
-                ("current_window_common_benchmark_metrics.csv", "benchmark"),
-                ("current_window_portfolio_weights.csv", "weights"),
-                ("current_window_moment_comparison.csv", "moments"),
-                ("current_window_neural_training_summary.csv", "neural_training"),
-            ]:
-                df = snap.get(key)
+
+            d_table_map = {
+                "D1_estimator_based_metrics.csv": snap.get("snapshot"),
+                "D2_common_historical_benchmark.csv": snap.get("benchmark"),
+                "D3_portfolio_weights.csv": snap.get("weights"),
+                "D4_moment_diagnostics.csv": snap.get("moments"),
+                "D_neural_training_diagnostics.csv": snap.get("neural_training"),
+                "D_portfolio_sync_audit.csv": snap.get("sync_audit"),
+            }
+
+            for name, df in d_table_map.items():
                 if isinstance(df, pd.DataFrame):
                     zf.writestr(name, df.to_csv(index=False))
 
-            df = snap.get("snapshot")
-            if isinstance(df, pd.DataFrame) and not df.empty:
+            d1 = snap.get("snapshot")
+            if isinstance(d1, pd.DataFrame) and not d1.empty:
                 fig = px.bar(
-                    df,
+                    d1,
                     x="Portfolio rule",
                     y="CER",
                     color="Estimator",
                     barmode="group",
-                    title="Estimator-Based Current-Window CER",
+                    title="D1. Estimator-Based Current-Window CER",
                 )
                 zf.writestr(
-                    "current_window_estimator_based_cer_chart.html",
+                    "D1_estimator_based_CER.html",
                     fig.to_html(full_html=True, include_plotlyjs="cdn"),
                 )
 
-            bench = snap.get("benchmark")
-            if isinstance(bench, pd.DataFrame) and not bench.empty:
+            d2 = snap.get("benchmark")
+            if isinstance(d2, pd.DataFrame) and not d2.empty:
                 fig = px.bar(
-                    bench,
+                    d2,
                     x="Portfolio rule",
                     y="Benchmark CER",
                     color="Estimator",
                     barmode="group",
-                    title="Common Historical-Benchmark CER",
+                    title="D2. Common Historical-Benchmark CER",
                 )
                 zf.writestr(
-                    "current_window_common_benchmark_cer_chart.html",
+                    "D2_common_benchmark_CER.html",
                     fig.to_html(full_html=True, include_plotlyjs="cdn"),
                 )
 
+            d3 = snap.get("weights")
+            if isinstance(d3, pd.DataFrame) and not d3.empty:
+                fig = px.bar(
+                    d3,
+                    x="Asset",
+                    y="Weight",
+                    color="Estimator",
+                    barmode="group",
+                    facet_col="Portfolio rule",
+                    title="D3. Portfolio Weight Comparison",
+                )
+                zf.writestr(
+                    "D3_portfolio_weights.html",
+                    fig.to_html(full_html=True, include_plotlyjs="cdn"),
+                )
+
+            d_metadata = pd.DataFrame(
+                {
+                    "Field": [
+                        "Portfolio revision",
+                        "Used shared Portfolio",
+                        "T",
+                        "Theoretical T",
+                        "T source",
+                        "b*",
+                        "b*/n signal",
+                        "gamma",
+                        "constraint mode",
+                        "max long weight",
+                        "max short weight",
+                        "max gross exposure",
+                    ],
+                    "Value": [
+                        snap.get("portfolio_revision"),
+                        snap.get("used_shared_portfolio"),
+                        snap.get("T"),
+                        snap.get("T_theory"),
+                        snap.get("T_source"),
+                        snap.get("b_star"),
+                        snap.get("signal"),
+                        snap.get("effective_gamma"),
+                        snap.get("effective_constraint_mode"),
+                        snap.get("effective_max_long_weight"),
+                        snap.get("effective_max_short_weight"),
+                        snap.get("effective_max_gross_exposure"),
+                    ],
+                }
+            )
+            zf.writestr("D_metadata.csv", d_metadata.to_csv(index=False))
+
         zf.writestr(
             "README.txt",
-            "Method Comparison saved-results package for Sections A-E.\n"
+            "Method Comparison saved-results package for Sections A-E, with explicit A, B, D, and E filenames.\n"
             "CSV files reproduce the saved tables. HTML files contain interactive charts.\n"
             "Section E includes diffusion-intensity tables, quadratic regression, T optimum metadata, and charts.\n",
         )
