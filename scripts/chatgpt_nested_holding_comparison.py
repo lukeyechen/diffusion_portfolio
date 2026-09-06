@@ -22,37 +22,54 @@ MAX_LONG = 0.40
 CANDIDATE_T = [0.0, 0.02, 0.05, 0.10, 0.20, 0.30, 0.50, 0.75, 1.00]
 COST_RATES = [0.0010, 0.0025]
 
-# Horizon-specific settings preserve a long estimation history while keeping
-# several chronological inner validation forecasts. Sparse long-horizon data
-# necessarily use fewer observations than the 2-week case.
+# Keep the estimation history approximately comparable in calendar time:
+# about 10 years for every holding period. Inner validation blocks are about
+# one year long and use rolling-origin nested validation.
 HORIZONS = {
-    "2 weeks": {
-        "periods_per_year": 26,
-        "lookback": 260,             # ~10 years of non-overlapping 2-week returns
+    "1 week": {
+        "source": "weekly",
+        "block_size": 1,
+        "periods_per_year": 52,
+        "lookback": 520,
         "inner_folds": 4,
-        "validation_size": 26,       # ~1 year per inner validation block
+        "validation_size": 52,
+        "min_train_size": 200,
+    },
+    "2 weeks": {
+        "source": "weekly",
+        "block_size": 2,
+        "periods_per_year": 26,
+        "lookback": 260,
+        "inner_folds": 4,
+        "validation_size": 26,
         "min_train_size": 100,
     },
-    "3 months": {
-        "periods_per_year": 4,
-        "lookback": 48,              # ~12 years
+    "1 month": {
+        "source": "monthly",
+        "block_size": 1,
+        "periods_per_year": 12,
+        "lookback": 120,
         "inner_folds": 4,
-        "validation_size": 4,        # 1 year
+        "validation_size": 12,
+        "min_train_size": 50,
+    },
+    "2 months": {
+        "source": "monthly",
+        "block_size": 2,
+        "periods_per_year": 6,
+        "lookback": 60,
+        "inner_folds": 4,
+        "validation_size": 6,
         "min_train_size": 30,
     },
-    "6 months": {
-        "periods_per_year": 2,
-        "lookback": 30,              # ~15 years
+    "3 months": {
+        "source": "monthly",
+        "block_size": 3,
+        "periods_per_year": 4,
+        "lookback": 40,
         "inner_folds": 4,
-        "validation_size": 2,        # 1 year
+        "validation_size": 4,
         "min_train_size": 20,
-    },
-    "1 year": {
-        "periods_per_year": 1,
-        "lookback": 15,              # ~15 years
-        "inner_folds": 2,
-        "validation_size": 2,        # 2 years; >=2 needed for covariance/CER
-        "min_train_size": 10,
     },
 }
 
@@ -136,34 +153,48 @@ def lw_weights(mu, sigma, returns):
     )
 
 
-def load_horizon_returns(label: str) -> pd.DataFrame:
-    if label == "2 weeks":
-        weekly = download_yahoo_returns(
-            TICKERS,
-            start=START,
-            end=END,
-            interval="1wk",
-        )[TICKERS].dropna()
-        # Aggregate complete, non-overlapping pairs of weekly returns.
-        n_complete = (len(weekly) // 2) * 2
-        weekly = weekly.iloc[:n_complete].copy()
-        values = weekly.to_numpy(dtype=float)
-        two_week = (1.0 + values[0::2]) * (1.0 + values[1::2]) - 1.0
-        idx = weekly.index[1::2]
-        return pd.DataFrame(two_week, index=idx, columns=TICKERS)
+def aggregate_nonoverlapping(base_returns: pd.DataFrame, block_size: int) -> pd.DataFrame:
+    """Compound complete non-overlapping return blocks of a fixed size."""
+    block_size = int(block_size)
+    if block_size < 1:
+        raise ValueError("block_size must be >= 1")
+    if block_size == 1:
+        return base_returns.copy()
 
-    months = {"3 months": 3, "6 months": 6, "1 year": 12}[label]
-    return download_yahoo_returns(
+    n_complete = (len(base_returns) // block_size) * block_size
+    if n_complete < 2 * block_size:
+        raise ValueError("Not enough observations for the requested holding-period blocks.")
+
+    base = base_returns.iloc[:n_complete].copy()
+    values = base.to_numpy(dtype=float).reshape(-1, block_size, len(TICKERS))
+    compounded = np.prod(1.0 + values, axis=1) - 1.0
+    idx = base.index[block_size - 1 :: block_size]
+    return pd.DataFrame(compounded, index=idx, columns=TICKERS)
+
+
+def download_base_returns():
+    # Download each native frequency once to reduce Yahoo calls and keep all
+    # horizons within that frequency aligned to the same underlying observations.
+    weekly = download_yahoo_returns(
+        TICKERS,
+        start=START,
+        end=END,
+        interval="1wk",
+    )[TICKERS].dropna()
+    monthly = download_yahoo_returns(
         TICKERS,
         start=START,
         end=END,
         interval="1mo",
-        return_horizon_months=months,
     )[TICKERS].dropna()
+    return {"weekly": weekly, "monthly": monthly}
 
 
-def run_horizon(label: str, cfg: dict):
-    returns = load_horizon_returns(label)
+def run_horizon(label: str, cfg: dict, base_returns: dict[str, pd.DataFrame]):
+    returns = aggregate_nonoverlapping(
+        base_returns[str(cfg["source"])],
+        int(cfg["block_size"]),
+    )
     lookback = int(cfg["lookback"])
     ppy = int(cfg["periods_per_year"])
     inner_folds = int(cfg["inner_folds"])
@@ -323,7 +354,10 @@ def run_horizon(label: str, cfg: dict):
             met = perf_metrics(gross_r - cost * turnover, gamma=GAMMA, periods_per_year=ppy)
             net_rows.append({"Method": name, **met})
         net_df = pd.DataFrame(net_rows)
-        print(net_df[["Method", "CAGR", "Annualized Sharpe (rf=0)", "Final $10,000"]].to_string(index=False, float_format=lambda z: f"{z:.6f}"))
+        print(
+            net_df[["Method", "CAGR", "Annualized Sharpe (rf=0)", "Final $10,000"]]
+            .to_string(index=False, float_format=lambda z: f"{z:.6f}")
+        )
 
     return summary, detail, pd.DataFrame([t_diag]), latest
 
@@ -334,13 +368,16 @@ def main():
     all_t = []
     all_latest = []
 
-    print("=== NESTED-T MULTI-HORIZON HOLDING COMPARISON ===")
+    print("=== NESTED-T SHORT-HORIZON 5-METHOD COMPARISON ===")
     print(f"Tickers: {', '.join(TICKERS)}")
     print(f"History requested: {START} to {END}; common OOS floor: {OOS_START.date()}")
     print(f"T grid: {CANDIDATE_T}; M={M}; beta={BETA}; SDE steps={N_STEPS}")
+    print("Holding periods: 1 week, 2 weeks, 1 month, 2 months, 3 months")
+
+    base_returns = download_base_returns()
 
     for label, cfg in HORIZONS.items():
-        summary, detail, t_diag, latest = run_horizon(label, cfg)
+        summary, detail, t_diag, latest = run_horizon(label, cfg, base_returns)
         all_summary.append(summary)
         all_detail.append(detail)
         all_t.append(t_diag)
@@ -351,25 +388,40 @@ def main():
     t_all = pd.concat(all_t, ignore_index=True)
     latest_all = pd.concat(all_latest, ignore_index=True)
 
-    print("\n=== DIFFUSION NESTED-T ACROSS HOLDING HORIZONS ===")
-    diff = summary_all[summary_all["Method"] == "Diffusion MV (Nested-T)"].copy()
-    ew = summary_all[summary_all["Method"] == "20% Equal Weight"].copy()
-    comp = diff.merge(ew, on="Horizon", suffixes=("_Diff", "_EW"))
-    comp["CAGR advantage vs EW"] = comp["CAGR_Diff"] - comp["CAGR_EW"]
-    comp["Ending-$10k advantage vs EW"] = comp["Final $10,000_Diff"] - comp["Final $10,000_EW"]
-    print(
-        comp[[
-            "Horizon", "OOS periods_Diff", "OOS start_Diff", "OOS end_Diff",
-            "CAGR_Diff", "CAGR_EW", "CAGR advantage vs EW",
-            "Annualized Sharpe (rf=0)_Diff", "Annualized Sharpe (rf=0)_EW",
-            "Final $10,000_Diff", "Final $10,000_EW", "Ending-$10k advantage vs EW",
-        ]].to_string(index=False, float_format=lambda z: f"{z:.6f}")
-    )
+    print("\n=== ALL FIVE METHODS: CAGR BY HOLDING PERIOD ===")
+    cagr_table = summary_all.pivot(index="Horizon", columns="Method", values="CAGR")
+    cagr_table = cagr_table.reindex(index=list(HORIZONS.keys()), columns=METHODS)
+    print(cagr_table.to_string(float_format=lambda z: f"{z:.6f}"))
+
+    print("\n=== ALL FIVE METHODS: SHARPE BY HOLDING PERIOD ===")
+    sharpe_table = summary_all.pivot(index="Horizon", columns="Method", values="Annualized Sharpe (rf=0)")
+    sharpe_table = sharpe_table.reindex(index=list(HORIZONS.keys()), columns=METHODS)
+    print(sharpe_table.to_string(float_format=lambda z: f"{z:.6f}"))
+
+    print("\n=== WINNER BY CAGR ===")
+    winners = []
+    for label in HORIZONS:
+        sub = summary_all[summary_all["Horizon"] == label]
+        best = sub.loc[sub["CAGR"].idxmax()]
+        winners.append(
+            {
+                "Horizon": label,
+                "Best method": best["Method"],
+                "Best CAGR": float(best["CAGR"]),
+                "Best Sharpe": float(best["Annualized Sharpe (rf=0)"]),
+                "Final $10,000": float(best["Final $10,000"]),
+            }
+        )
+    winners_df = pd.DataFrame(winners)
+    print(winners_df.to_string(index=False, float_format=lambda z: f"{z:.6f}"))
 
     summary_all.to_csv("nested_holding_summary.csv", index=False)
     detail_all.to_csv("nested_holding_detail.csv", index=False)
     t_all.to_csv("nested_holding_t_diagnostics.csv", index=False)
     latest_all.to_csv("nested_holding_latest_weights.csv", index=False)
+    cagr_table.to_csv("nested_holding_cagr_table.csv")
+    sharpe_table.to_csv("nested_holding_sharpe_table.csv")
+    winners_df.to_csv("nested_holding_winners.csv", index=False)
 
 
 if __name__ == "__main__":
