@@ -25,8 +25,14 @@ jobs:
           pip install -r requirements.txt
       - name: Run pytest suite
         run: pytest -q
-      - name: Compile upgraded Streamlit views
-        run: python -m py_compile app.py views/Portfolio_Upgraded.py views/Method_Comparison_Upgraded.py core/short_horizon_portfolio.py
+      - name: Compile Streamlit views and comparison engines
+        run: |
+          python -m py_compile app.py \
+            views/Portfolio_Upgraded.py \
+            views/Method_Comparison_Upgraded.py \
+            views/Method_Comparison_Legacy_Upgraded.py \
+            core/short_horizon_portfolio.py \
+            core/legacy_periodic_oos.py
       - name: Calculate latest recommended weights
         run: python scripts/chatgpt_latest_recommended_weights.py
       - name: Upload latest recommended weights
