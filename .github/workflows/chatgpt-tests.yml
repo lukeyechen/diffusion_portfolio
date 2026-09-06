@@ -25,14 +25,10 @@ jobs:
           pip install -r requirements.txt
       - name: Run pytest suite
         run: pytest -q
-      - name: Run active Best-T turnover upgrade comparison
-        run: python scripts/chatgpt_turnover_upgrade_bestT.py
-      - name: Upload Best-T turnover CSVs
+      - name: Calculate latest recommended weights
+        run: python scripts/chatgpt_latest_recommended_weights.py
+      - name: Upload latest recommended weights
         uses: actions/upload-artifact@v4
         with:
-          name: bestT-turnover-upgrade-comparison
-          path: |
-            turnover_bestT_summary.csv
-            turnover_bestT_detail.csv
-            turnover_bestT_t_diagnostics.csv
-            turnover_bestT_comparison.csv
+          name: latest-recommended-weights
+          path: latest_recommended_weights.csv
