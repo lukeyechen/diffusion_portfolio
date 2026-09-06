@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from core.data import download_yahoo_returns
+from core.data import download_yahoo_monthly_returns
 from core.diffusion import diffusion_augmented_moments
 from core.moments import sample_moments
 from core.portfolio_rules import compute_weights
@@ -19,7 +19,7 @@ BETA = 1.0
 N_STEPS = 100
 SEED = 42
 MAX_LONG = 0.40
-COST_RATES = [0.0010, 0.0025]  # 10 bps and 25 bps per unit turnover
+COST_RATES = [0.0010, 0.0025]
 
 
 def drifted_weights(w, asset_returns):
@@ -52,12 +52,10 @@ def perf_metrics(r, periods_per_year=12):
 
 
 def main():
-    returns = download_yahoo_returns(
+    returns = download_yahoo_monthly_returns(
         TICKERS,
         start=START,
         end=END,
-        interval="1mo",
-        return_horizon_months=1,
     )
     returns = returns[TICKERS].dropna().copy()
 
