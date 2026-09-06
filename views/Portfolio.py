@@ -482,6 +482,19 @@ c3.metric("N / n", f"{n_assets / n_obs:.3f}")
 
 st.dataframe(returns.tail(), use_container_width=True)
 
+st.download_button(
+    "Download historical returns (.csv)",
+    data=returns.to_csv(index=True, index_label="Date").encode("utf-8"),
+    file_name=f"historical_returns_{interval_label.replace(' ', '_')}.csv",
+    mime="text/csv",
+    key="download_historical_returns_csv",
+    on_click="ignore",
+)
+st.caption(
+    "Downloads the full return history, including dates and all assets. "
+    "Returns are decimals: 0.01 means 1%."
+)
+
 if source == "Yahoo Finance":
     st.caption(f"Selected return interval: {interval_label}")
 
@@ -1151,6 +1164,16 @@ else:
     window = returns.iloc[-int(lookback):]
 
 x = window.to_numpy(dtype=float)
+
+st.download_button(
+    "Download estimation window (.csv)",
+    data=window.to_csv(index=True, index_label="Date").encode("utf-8"),
+    file_name=f"estimation_window_{interval_label.replace(' ', '_')}_n{len(window)}.csv",
+    mime="text/csv",
+    key="download_estimation_window_csv",
+    on_click="ignore",
+)
+st.caption("Downloads the exact historical observations used for this portfolio analysis.")
 
 mu_hist, sigma_hist = sample_moments(x, mle=True)
 hist_cond = covariance_condition_number(sigma_hist)
