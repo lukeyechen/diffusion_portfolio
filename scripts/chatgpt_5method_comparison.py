@@ -7,7 +7,7 @@ from core.data import download_yahoo_monthly_returns
 from core.diffusion import diffusion_augmented_moments
 from core.moments import sample_moments
 from core.portfolio_rules import compute_weights
-from core.tuning import validation_tuned_horizon
+from core.tuning import nested_rolling_validation_tuned_horizon
 
 TICKERS = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN"]
 START = "2000-01-01"
@@ -20,7 +20,8 @@ BETA = 1.0
 N_STEPS = 100
 SEED = 42
 MAX_LONG = 0.40
-VALIDATION_FRACTION = 0.20
+INNER_FOLDS = 4
+INNER_VALIDATION_SIZE = 12
 CANDIDATE_T = [0.0, 0.02, 0.05, 0.10, 0.20, 0.30, 0.50, 0.75, 1.00]
 COST_RATES = [0.0010, 0.0025]  # 10 and 25 bps per unit turnover
 
@@ -28,7 +29,7 @@ METHODS = [
     "20% Equal Weight",
     "Classical MV",
     "Classical MV + LW",
-    "Diffusion MV (Val-T)",
+    "Diffusion MV (Nested-T)",
     "50% Diffusion + 50% EW",
 ]
 
@@ -123,7 +124,7 @@ def main():
         w_classical = mv_weights(mu_hist, sigma_hist, x)
         w_lw = lw_weights(mu_hist, sigma_hist, x)
 
-        T_val, val_results = validation_tuned_horizon(
+        T_val, nested_results = nested_rolling_validation_tuned_horizon(
             x,
             gamma=GAMMA,
             rule="Mean-Variance",
@@ -131,7 +132,8 @@ def main():
             beta=BETA,
             n_steps=N_STEPS,
             candidate_T=CANDIDATE_T,
-            validation_fraction=VALIDATION_FRACTION,
+            inner_folds=INNER_FOLDS,
+            validation_size=INNER_VALIDATION_SIZE,
             seed=SEED + i * 100,
             constraint_mode="Long-only",
             max_long_weight=MAX_LONG,
@@ -155,15 +157,22 @@ def main():
             "20% Equal Weight": w_ew,
             "Classical MV": w_classical,
             "Classical MV + LW": w_lw,
-            "Diffusion MV (Val-T)": w_diff,
+            "Diffusion MV (Nested-T)": w_diff,
             "50% Diffusion + 50% EW": w_blend,
         }
         latest_weights = {k: v.copy() for k, v in weights.items()}
 
+        best_nested = max(
+            nested_results,
+            key=lambda r: (r["mean_validation_CER"], -r["T"]),
+        )
         row = {
             "date": str(pd.Timestamp(returns.index[i]).date()),
             "selected_T": float(T_val),
-            "best_validation_CER": float(max(r["validation_CER"] for r in val_results)),
+            "best_nested_mean_CER": float(best_nested["mean_validation_CER"]),
+            "best_nested_std_CER": float(best_nested["std_validation_CER"]),
+            "inner_folds": int(INNER_FOLDS),
+            "inner_validation_size": int(INNER_VALIDATION_SIZE),
         }
 
         for name, w in weights.items():
@@ -191,7 +200,7 @@ def main():
     summary = pd.DataFrame(summary_rows).T
     summary["Avg monthly turnover"] = pd.Series(turnover_means)
 
-    print("\n=== EXACT 5-METHOD MONTHLY OOS COMPARISON ===")
+    print("\n=== EXACT 5-METHOD MONTHLY OOS COMPARISON: NESTED ROLLING T ===")
     print(f"Tickers: {', '.join(TICKERS)}")
     print(f"Source history requested: {START} to {END}")
     print(f"Common monthly return observations: {len(returns)}")
@@ -199,7 +208,10 @@ def main():
     print(f"OOS start: {detail['date'].iloc[0]} | OOS end: {detail['date'].iloc[-1]}")
     print(f"OOS months: {len(detail)}")
     print(f"Constraints: long-only, fully invested, max asset weight={MAX_LONG:.0%}, gamma={GAMMA}")
-    print(f"Diffusion: validation-tuned T, M={M}, beta={BETA}, steps={N_STEPS}, validation fraction={VALIDATION_FRACTION:.0%}")
+    print(f"Diffusion: nested rolling validation T, M={M}, beta={BETA}, steps={N_STEPS}")
+    print(f"Inner rolling folds: {INNER_FOLDS}; validation block per fold: {INNER_VALIDATION_SIZE} months")
+    first_inner_train = LOOKBACK - INNER_FOLDS * INNER_VALIDATION_SIZE
+    print(f"Inner train sizes: {[first_inner_train + j * INNER_VALIDATION_SIZE for j in range(INNER_FOLDS)]}")
     print(f"T grid: {CANDIDATE_T}")
 
     print("\n=== GROSS OOS PERFORMANCE ===")
@@ -211,7 +223,7 @@ def main():
     print(summary[cols].to_string(float_format=lambda z: f"{z:.6f}"))
 
     t_series = pd.Series(t_values)
-    print("\n=== VALIDATION-TUNED T ===")
+    print("\n=== NESTED-ROLLING SELECTED T ===")
     print(f"T>0 windows: {(t_series > 0).sum()} / {len(t_series)} ({(t_series > 0).mean():.2%})")
     print(f"T=0 windows: {(t_series == 0).sum()} / {len(t_series)} ({(t_series == 0).mean():.2%})")
     print(f"Average selected T: {t_series.mean():.6f}")
@@ -231,8 +243,8 @@ def main():
         print(f"Realized CER difference: {(summary.loc[a, 'Realized CER (gamma=3)'] - summary.loc[b, 'Realized CER (gamma=3)']):.4%}")
         print(f"Ending-$10k difference: ${(summary.loc[a, 'Final $10,000'] - summary.loc[b, 'Final $10,000']):,.2f}")
 
-    direct_compare("Diffusion MV (Val-T)", "Classical MV")
-    direct_compare("Diffusion MV (Val-T)", "20% Equal Weight")
+    direct_compare("Diffusion MV (Nested-T)", "Classical MV")
+    direct_compare("Diffusion MV (Nested-T)", "20% Equal Weight")
     direct_compare("50% Diffusion + 50% EW", "20% Equal Weight")
 
     for cost in COST_RATES:
