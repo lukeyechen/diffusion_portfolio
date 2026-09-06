@@ -42,7 +42,7 @@ VIEW_FILES = {
     "Backtest": "Backtest.py",
     "Diffusion Diagnostics": "Diffusion_Diagnostics.py",
     "Portfolio (Legacy)": "Portfolio.py",
-    "Method Comparison (Legacy)": "Method_Comparison.py",
+    "Method Comparison (Legacy)": "Method_Comparison_Legacy_Upgraded.py",
 }
 
 view_path = Path(__file__).parent / "views" / VIEW_FILES[selected]
