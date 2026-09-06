@@ -32,9 +32,12 @@ jobs:
             views/Method_Comparison_Upgraded.py \
             views/Method_Comparison_Legacy_Upgraded.py \
             views/Method_Comparison_Legacy_Short.py \
+            views/Backtest.py \
+            views/Diffusion_Diagnostics.py \
             core/short_horizon_portfolio.py \
             core/legacy_periodic_oos.py \
-            core/horizon_study.py
+            core/horizon_study.py \
+            core/turnover_upgrade.py
       - name: Calculate latest recommended weights
         run: python scripts/chatgpt_latest_recommended_weights.py
       - name: Upload latest recommended weights
