@@ -25,16 +25,6 @@ jobs:
           pip install -r requirements.txt
       - name: Run pytest suite
         run: pytest -q
-      - name: Run exact 5-method comparison
-        run: python scripts/chatgpt_5method_comparison.py
-      - name: Upload 5-method comparison CSVs
-        uses: actions/upload-artifact@v4
-        with:
-          name: five-method-comparison
-          path: |
-            five_method_comparison_summary.csv
-            five_method_comparison_detail.csv
-            five_method_latest_weights.csv
       - name: Run nested-T holding-period comparison
         run: python scripts/chatgpt_nested_holding_comparison.py
       - name: Upload nested holding-period CSVs
