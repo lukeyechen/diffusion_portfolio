@@ -25,30 +25,12 @@ jobs:
           pip install -r requirements.txt
       - name: Run pytest suite
         run: pytest -q
-      - name: Run 3M diffusion vs equal-weight backtest
-        run: python scripts/chatgpt_3m_backtest.py
-      - name: Upload 3M backtest CSVs
+      - name: Run 1M diffusion vs equal-weight backtest
+        run: python scripts/chatgpt_1m_backtest.py
+      - name: Upload 1M backtest CSVs
         uses: actions/upload-artifact@v4
         with:
-          name: three-month-backtest
+          name: one-month-backtest
           path: |
-            three_month_backtest_summary.csv
-            three_month_backtest_detail.csv
-      - name: Run 6M diffusion vs equal-weight backtest
-        run: python scripts/chatgpt_6m_backtest.py
-      - name: Upload 6M backtest CSVs
-        uses: actions/upload-artifact@v4
-        with:
-          name: six-month-backtest
-          path: |
-            six_month_backtest_summary.csv
-            six_month_backtest_detail.csv
-      - name: Run 1Y diffusion vs equal-weight backtest
-        run: python scripts/chatgpt_1y_backtest.py
-      - name: Upload 1Y backtest CSVs
-        uses: actions/upload-artifact@v4
-        with:
-          name: one-year-backtest
-          path: |
-            one_year_backtest_summary.csv
-            one_year_backtest_detail.csv
+            one_month_backtest_summary.csv
+            one_month_backtest_detail.csv
