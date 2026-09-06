@@ -13,6 +13,8 @@ SECTIONS = [
     "Method Comparison",
     "Backtest",
     "Diffusion Diagnostics",
+    "Portfolio (Legacy)",
+    "Method Comparison (Legacy)",
 ]
 
 if "app_section" not in st.session_state:
@@ -35,10 +37,12 @@ if selected != st.session_state["app_section"]:
     st.rerun()
 
 VIEW_FILES = {
-    "Portfolio": "Portfolio.py",
-    "Method Comparison": "Method_Comparison.py",
+    "Portfolio": "Portfolio_Upgraded.py",
+    "Method Comparison": "Method_Comparison_Upgraded.py",
     "Backtest": "Backtest.py",
     "Diffusion Diagnostics": "Diffusion_Diagnostics.py",
+    "Portfolio (Legacy)": "Portfolio.py",
+    "Method Comparison (Legacy)": "Method_Comparison.py",
 }
 
 view_path = Path(__file__).parent / "views" / VIEW_FILES[selected]
