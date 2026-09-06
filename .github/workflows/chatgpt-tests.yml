@@ -35,3 +35,14 @@ jobs:
             five_method_comparison_summary.csv
             five_method_comparison_detail.csv
             five_method_latest_weights.csv
+      - name: Run nested-T holding-period comparison
+        run: python scripts/chatgpt_nested_holding_comparison.py
+      - name: Upload nested holding-period CSVs
+        uses: actions/upload-artifact@v4
+        with:
+          name: nested-holding-comparison
+          path: |
+            nested_holding_summary.csv
+            nested_holding_detail.csv
+            nested_holding_t_diagnostics.csv
+            nested_holding_latest_weights.csv
