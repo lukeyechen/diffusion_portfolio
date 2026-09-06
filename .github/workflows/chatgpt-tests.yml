@@ -34,3 +34,12 @@ jobs:
           path: |
             three_month_backtest_summary.csv
             three_month_backtest_detail.csv
+      - name: Run 6M diffusion vs equal-weight backtest
+        run: python scripts/chatgpt_6m_backtest.py
+      - name: Upload 6M backtest CSVs
+        uses: actions/upload-artifact@v4
+        with:
+          name: six-month-backtest
+          path: |
+            six_month_backtest_summary.csv
+            six_month_backtest_detail.csv
