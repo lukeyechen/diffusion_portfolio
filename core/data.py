@@ -48,7 +48,9 @@ def download_yahoo_returns(
     start, end
         Date range.
     interval
-        Native Yahoo interval such as 1d, 1wk, or 1mo.
+        Native Yahoo interval such as 1d, 1wk, or 1mo. Weekly returns are
+        constructed from daily adjusted closes resampled to Friday so there is
+        exactly one observation per calendar week.
     return_horizon_months
         If 3, 6, or 12, monthly prices are downloaded and converted to
         non-overlapping 3-, 6-, or 12-month returns.
@@ -66,7 +68,10 @@ def download_yahoo_returns(
         yahoo_interval = "1mo"
     else:
         h = None
-        yahoo_interval = interval
+        # yfinance's native weekly index can occasionally contain duplicate
+        # weekly anchors when multiple tickers are downloaded together. Build
+        # a deterministic one-row-per-week series from daily adjusted closes.
+        yahoo_interval = "1d" if interval == "1wk" else interval
 
     raw = yf.download(
         tickers,
@@ -107,6 +112,10 @@ def download_yahoo_returns(
     prices = prices.sort_index().dropna(how="all").ffill().dropna()
 
     if h is None:
+        if interval == "1wk":
+            # Friday-labeled week-end adjusted close. Holiday weeks use the
+            # last available trading-day close but still receive one Friday label.
+            prices = prices.resample("W-FRI").last().dropna(how="all").ffill().dropna()
         returns = prices.pct_change(fill_method=None)
     else:
         # Build non-overlapping h-month returns from monthly observations.
