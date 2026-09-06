@@ -25,14 +25,14 @@ jobs:
           pip install -r requirements.txt
       - name: Run pytest suite
         run: pytest -q
-      - name: Run turnover-control upgrade comparison
-        run: python scripts/chatgpt_turnover_upgrade.py
-      - name: Upload turnover upgrade CSVs
+      - name: Run active Best-T turnover upgrade comparison
+        run: python scripts/chatgpt_turnover_upgrade_bestT.py
+      - name: Upload Best-T turnover CSVs
         uses: actions/upload-artifact@v4
         with:
-          name: turnover-upgrade-comparison
+          name: bestT-turnover-upgrade-comparison
           path: |
-            turnover_upgrade_summary.csv
-            turnover_upgrade_detail.csv
-            turnover_upgrade_t_diagnostics.csv
-            turnover_upgrade_comparison.csv
+            turnover_bestT_summary.csv
+            turnover_bestT_detail.csv
+            turnover_bestT_t_diagnostics.csv
+            turnover_bestT_comparison.csv
