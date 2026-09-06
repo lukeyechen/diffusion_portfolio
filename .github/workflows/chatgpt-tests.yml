@@ -25,12 +25,13 @@ jobs:
           pip install -r requirements.txt
       - name: Run pytest suite
         run: pytest -q
-      - name: Run 1M diffusion vs equal-weight backtest
-        run: python scripts/chatgpt_1m_backtest.py
-      - name: Upload 1M backtest CSVs
+      - name: Run exact 5-method comparison
+        run: python scripts/chatgpt_5method_comparison.py
+      - name: Upload 5-method comparison CSVs
         uses: actions/upload-artifact@v4
         with:
-          name: one-month-backtest
+          name: five-method-comparison
           path: |
-            one_month_backtest_summary.csv
-            one_month_backtest_detail.csv
+            five_method_comparison_summary.csv
+            five_method_comparison_detail.csv
+            five_method_latest_weights.csv
