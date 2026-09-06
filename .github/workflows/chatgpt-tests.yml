@@ -25,17 +25,14 @@ jobs:
           pip install -r requirements.txt
       - name: Run pytest suite
         run: pytest -q
-      - name: Run short-horizon five-method comparison
-        run: python scripts/chatgpt_nested_holding_comparison.py
-      - name: Upload short-horizon comparison CSVs
+      - name: Run turnover-control upgrade comparison
+        run: python scripts/chatgpt_turnover_upgrade.py
+      - name: Upload turnover upgrade CSVs
         uses: actions/upload-artifact@v4
         with:
-          name: nested-holding-comparison
+          name: turnover-upgrade-comparison
           path: |
-            nested_holding_summary.csv
-            nested_holding_detail.csv
-            nested_holding_t_diagnostics.csv
-            nested_holding_latest_weights.csv
-            nested_holding_cagr_table.csv
-            nested_holding_sharpe_table.csv
-            nested_holding_winners.csv
+            turnover_upgrade_summary.csv
+            turnover_upgrade_detail.csv
+            turnover_upgrade_t_diagnostics.csv
+            turnover_upgrade_comparison.csv
