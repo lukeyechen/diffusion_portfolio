@@ -25,9 +25,11 @@ jobs:
           pip install -r requirements.txt
       - name: Run pytest suite
         run: pytest -q
-      - name: Compile Streamlit views and comparison engines
+      - name: Compile Streamlit views, API, and comparison engines
         run: |
           python -m py_compile app.py \
+            api/main.py \
+            api/schemas.py \
             views/Portfolio_Upgraded.py \
             views/Method_Comparison_Upgraded.py \
             views/Method_Comparison_Legacy_Upgraded.py \
@@ -38,6 +40,8 @@ jobs:
             core/legacy_periodic_oos.py \
             core/horizon_study.py \
             core/turnover_upgrade.py
+      - name: Build Cloud Run API container
+        run: docker build -t diffusion-portfolio-api:test .
       - name: Calculate latest recommended weights
         run: python scripts/chatgpt_latest_recommended_weights.py
       - name: Upload latest recommended weights
