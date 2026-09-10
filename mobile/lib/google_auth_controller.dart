@@ -32,7 +32,10 @@ class GoogleAuthController extends ChangeNotifier {
     _initialized = true;
     _setBusy(true);
     try {
-      await _signIn.initialize(serverClientId: serverClientId);
+      await _signIn.initialize(
+        clientId: kIsWeb ? serverClientId : null,
+        serverClientId: kIsWeb ? null : serverClientId,
+      );
       _subscription = _signIn.authenticationEvents.listen(
         _handleAuthenticationEvent,
         onError: _handleAuthenticationError,
