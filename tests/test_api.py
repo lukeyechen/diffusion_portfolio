@@ -33,6 +33,16 @@ def test_openapi_contract():
     assert "/v1/backtest" in paths
 
 
+def test_pwa_origin_has_cors_access():
+    cors = next(
+        middleware
+        for middleware in api.app.user_middleware
+        if middleware.cls is api.CORSMiddleware
+    )
+    assert "https://lukeyechen.github.io" in cors.kwargs["allow_origins"]
+    assert "Authorization" in cors.kwargs["allow_headers"]
+
+
 def test_google_auth_allows_only_configured_email(monkeypatch):
     monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_IDS", "web-client.apps.googleusercontent.com")
     monkeypatch.setenv(
