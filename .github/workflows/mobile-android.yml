@@ -35,7 +35,9 @@ jobs:
       - name: Preserve Android signing certificate
         uses: actions/cache@v4
         with:
-          path: ~/.android/debug.keystore
+          path: |
+            ~/.android/debug.keystore
+            ~/.config/.android/debug.keystore
           key: ${{ runner.os }}-diffusion-portfolio-debug-key-v1
 
       - name: Generate platform wrappers

@@ -34,7 +34,11 @@ class PortfolioHomePage extends StatefulWidget {
 }
 
 class _PortfolioHomePageState extends State<PortfolioHomePage> {
-  static const _configuredApiUrl = String.fromEnvironment('API_BASE_URL');
+  static const _configuredApiUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue:
+        'https://diffusion-portfolio-api-2n4i7hamea-ue.a.run.app',
+  );
 
   final _apiUrlController = TextEditingController(text: _configuredApiUrl);
   final _auth = GoogleAuthController();
