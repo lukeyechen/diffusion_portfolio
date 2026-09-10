@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'api_client.dart';
 import 'google_auth_controller.dart';
+import 'google_sign_in_button.dart';
 
 void main() {
   runApp(const DiffusionPortfolioApp());
@@ -189,21 +190,11 @@ class _GoogleConnectionCard extends StatelessWidget {
               )
             else if (auth.isSignedIn)
               _SignedInAccount(auth: auth)
+            else if (auth.isBusy)
+              const Center(child: CircularProgressIndicator())
             else
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: auth.isBusy ? null : auth.signIn,
-                  icon: auth.isBusy
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.login),
-                  label: Text(
-                    auth.isBusy ? 'Connecting…' : 'Sign in with Google',
-                  ),
-                ),
+              buildGoogleSignInButton(
+                onPressed: auth.signIn,
               ),
             if (auth.error != null) ...[
               const SizedBox(height: 8),
