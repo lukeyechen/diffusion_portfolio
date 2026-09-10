@@ -1,6 +1,7 @@
 substitutions:
   _GOOGLE_OAUTH_CLIENT_IDS: "144819245123-2p7ck8l2jonk73sulhn67hhfbj5ti9ua.apps.googleusercontent.com"
-  # Set the real value privately on the Cloud Build trigger.\n  _ALLOWED_GOOGLE_EMAILS: "configure-in-cloud-build-trigger"
+  # Set the real value privately on the Cloud Build trigger.
+  _ALLOWED_GOOGLE_EMAILS: "configure-in-cloud-build-trigger"
   _ALLOWED_WEB_ORIGINS: "https://lukeyechen.github.io"
 
 steps:
