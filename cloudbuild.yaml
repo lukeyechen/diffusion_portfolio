@@ -1,3 +1,7 @@
+substitutions:
+  _GOOGLE_OAUTH_CLIENT_IDS: "144819245123-2p7ck8l2jonk73sulhn67hhfbj5ti9ua.apps.googleusercontent.com"
+  _ALLOWED_GOOGLE_EMAILS: "st.yeyo@gmail.com"
+
 steps:
   - name: "gcr.io/cloud-builders/docker"
     args:
@@ -48,7 +52,7 @@ steps:
       - "--image=us-east1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/diffusion-portfolio:$COMMIT_SHA"
       - "--region=us-east1"
       - "--platform=managed"
-      - "--set-env-vars=APP_MODE=api"
+      - "--set-env-vars=APP_MODE=api,GOOGLE_OAUTH_CLIENT_IDS=$_GOOGLE_OAUTH_CLIENT_IDS,ALLOWED_GOOGLE_EMAILS=$_ALLOWED_GOOGLE_EMAILS"
       - "--port=8080"
       - "--memory=2Gi"
       - "--cpu=1"
@@ -56,8 +60,7 @@ steps:
       - "--max-instances=1"
       - "--concurrency=1"
       - "--timeout=3600s"
-      - "--no-allow-unauthenticated"
-      - "--invoker-iam-check"
+      - "--no-invoker-iam-check"
       - "--quiet"
 
 images:

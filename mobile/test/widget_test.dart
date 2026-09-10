@@ -2,10 +2,15 @@ import 'package:diffusion_portfolio_mobile/main.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('shows private connection and portfolio controls', (tester) async {
-    await tester.pumpWidget(const DiffusionPortfolioApp());
+  testWidgets('shows Google connection and portfolio controls', (tester) async {
+    // Google authentication itself is exercised on an Android device.
+    await tester.pumpWidget(
+      const DiffusionPortfolioApp(initializeGoogleSignIn: false),
+    );
 
-    expect(find.text('Private Google Cloud connection'), findsOneWidget);
+    expect(find.text('Secure Google account'), findsOneWidget);
+    expect(find.text('API URL'), findsOneWidget);
+    expect(find.textContaining('OAuth client ID'), findsNothing);
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
 

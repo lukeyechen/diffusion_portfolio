@@ -1,13 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'api_client.dart';
+import 'google_auth_controller.dart';
 
 void main() {
   runApp(const DiffusionPortfolioApp());
 }
 
 class DiffusionPortfolioApp extends StatelessWidget {
-  const DiffusionPortfolioApp({super.key});
+  const DiffusionPortfolioApp({
+    super.key,
+    this.initializeGoogleSignIn = true,
+  });
+
+  final bool initializeGoogleSignIn;
 
   @override
   Widget build(BuildContext context) {
@@ -18,30 +26,57 @@ class DiffusionPortfolioApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff3157d5)),
         useMaterial3: true,
       ),
-      home: const PortfolioHomePage(),
+      home: PortfolioHomePage(
+        initializeGoogleSignIn: initializeGoogleSignIn,
+      ),
     );
   }
 }
 
 class PortfolioHomePage extends StatefulWidget {
-  const PortfolioHomePage({super.key});
+  const PortfolioHomePage({
+    super.key,
+    this.initializeGoogleSignIn = true,
+  });
+
+  final bool initializeGoogleSignIn;
 
   @override
   State<PortfolioHomePage> createState() => _PortfolioHomePageState();
 }
 
 class _PortfolioHomePageState extends State<PortfolioHomePage> {
-  static const _configuredApiUrl = String.fromEnvironment('API_BASE_URL');
+  static const _configuredApiUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue:
+        'https://diffusion-portfolio-api-2n4i7hamea-ue.a.run.app',
+  );
 
   final _apiUrlController = TextEditingController(text: _configuredApiUrl);
-  final _tokenController = TextEditingController();
+  final _auth = GoogleAuthController();
   int _selectedPage = 0;
   bool _showConnection = true;
 
   @override
+  void initState() {
+    super.initState();
+    _auth.addListener(_authChanged);
+    if (widget.initializeGoogleSignIn) {
+      unawaited(_auth.initialize());
+    }
+  }
+
+  void _authChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
   void dispose() {
     _apiUrlController.dispose();
-    _tokenController.dispose();
+    _auth.removeListener(_authChanged);
+    _auth.dispose();
     super.dispose();
   }
 
@@ -52,9 +87,9 @@ class _PortfolioHomePageState extends State<PortfolioHomePage> {
         title: const Text('Diffusion Portfolio'),
         actions: [
           IconButton(
-            tooltip: 'Private API connection',
+            tooltip: 'Google account and API connection',
             onPressed: () => setState(() => _showConnection = !_showConnection),
-            icon: const Icon(Icons.lock_outline),
+            icon: Icon(_auth.isSignedIn ? Icons.verified_user : Icons.login),
           ),
         ],
       ),
@@ -62,9 +97,9 @@ class _PortfolioHomePageState extends State<PortfolioHomePage> {
         child: Column(
           children: [
             if (_showConnection)
-              _ConnectionCard(
+              _GoogleConnectionCard(
                 apiUrlController: _apiUrlController,
-                tokenController: _tokenController,
+                auth: _auth,
                 onDone: () => setState(() => _showConnection = false),
               ),
             Expanded(
@@ -73,11 +108,11 @@ class _PortfolioHomePageState extends State<PortfolioHomePage> {
                 children: [
                   RecommendationPage(
                     apiUrl: () => _apiUrlController.text,
-                    identityToken: () => _tokenController.text,
+                    identityToken: () => _auth.idToken ?? '',
                   ),
                   BacktestPage(
                     apiUrl: () => _apiUrlController.text,
-                    identityToken: () => _tokenController.text,
+                    identityToken: () => _auth.idToken ?? '',
                   ),
                 ],
               ),
@@ -104,23 +139,16 @@ class _PortfolioHomePageState extends State<PortfolioHomePage> {
   }
 }
 
-class _ConnectionCard extends StatefulWidget {
-  const _ConnectionCard({
+class _GoogleConnectionCard extends StatelessWidget {
+  const _GoogleConnectionCard({
     required this.apiUrlController,
-    required this.tokenController,
+    required this.auth,
     required this.onDone,
   });
 
   final TextEditingController apiUrlController;
-  final TextEditingController tokenController;
+  final GoogleAuthController auth;
   final VoidCallback onDone;
-
-  @override
-  State<_ConnectionCard> createState() => _ConnectionCardState();
-}
-
-class _ConnectionCardState extends State<_ConnectionCard> {
-  bool _showToken = false;
 
   @override
   Widget build(BuildContext context) {
@@ -136,14 +164,14 @@ class _ConnectionCardState extends State<_ConnectionCard> {
                 Icon(Icons.verified_user_outlined, size: 20),
                 SizedBox(width: 8),
                 Text(
-                  'Private Google Cloud connection',
+                  'Secure Google account',
                   style: TextStyle(fontWeight: FontWeight.w600),
                 ),
               ],
             ),
             const SizedBox(height: 12),
             TextField(
-              controller: widget.apiUrlController,
+              controller: apiUrlController,
               keyboardType: TextInputType.url,
               autocorrect: false,
               decoration: const InputDecoration(
@@ -152,38 +180,101 @@ class _ConnectionCardState extends State<_ConnectionCard> {
                 border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: widget.tokenController,
-              obscureText: !_showToken,
-              autocorrect: false,
-              enableSuggestions: false,
-              decoration: InputDecoration(
-                labelText: 'Temporary Google identity token',
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  tooltip: _showToken ? 'Hide token' : 'Show token',
-                  onPressed: () => setState(() => _showToken = !_showToken),
-                  icon: Icon(_showToken ? Icons.visibility_off : Icons.visibility),
+            const SizedBox(height: 12),
+            if (!auth.isConfigured)
+              const _AuthenticationNotice(
+                icon: Icons.settings_outlined,
+                message:
+                    'Google sign-in needs the project OAuth client ID before it can be used.',
+              )
+            else if (auth.isSignedIn)
+              _SignedInAccount(auth: auth)
+            else
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: auth.isBusy ? null : auth.signIn,
+                  icon: auth.isBusy
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.login),
+                  label: Text(
+                    auth.isBusy ? 'Connecting…' : 'Sign in with Google',
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'The token stays in memory only and is erased when the app closes.',
-              style: TextStyle(fontSize: 12),
-            ),
+            if (auth.error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                auth.error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,
               child: FilledButton.tonal(
-                onPressed: widget.onDone,
+                onPressed: onDone,
                 child: const Text('Done'),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _AuthenticationNotice extends StatelessWidget {
+  const _AuthenticationNotice({required this.icon, required this.message});
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20),
+        const SizedBox(width: 8),
+        Expanded(child: Text(message)),
+      ],
+    );
+  }
+}
+
+class _SignedInAccount extends StatelessWidget {
+  const _SignedInAccount({required this.auth});
+
+  final GoogleAuthController auth;
+
+  @override
+  Widget build(BuildContext context) {
+    final user = auth.user!;
+    return Row(
+      children: [
+        const CircleAvatar(child: Icon(Icons.person)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                user.displayName ?? 'Google account',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              Text(user.email, style: const TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        TextButton(
+          onPressed: auth.isBusy ? null : auth.signOut,
+          child: const Text('Sign out'),
+        ),
+      ],
     );
   }
 }

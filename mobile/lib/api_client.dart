@@ -72,7 +72,7 @@ class PortfolioApiClient {
       final message = detail is String
           ? detail
           : response.statusCode == 401 || response.statusCode == 403
-              ? 'Access denied. Generate a new Google identity token.'
+              ? 'Access denied. Sign out and sign in with Google again.'
               : 'Cloud request failed (${response.statusCode}).';
       throw ApiException(message, statusCode: response.statusCode);
     }
