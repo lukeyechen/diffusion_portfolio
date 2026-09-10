@@ -1,0 +1,99 @@
+name: Deploy iPhone PWA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, iphone-pwa]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile-web.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-pwa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate web wrapper
+        working-directory: mobile
+        run: |
+          custom_files="$(mktemp -d)"
+          cp -R lib test web "$custom_files/"
+          cp pubspec.yaml analysis_options.yaml "$custom_files/"
+          flutter create \
+            --platforms=web \
+            --org=com.lukeyechen \
+            --project-name=diffusion_portfolio_mobile \
+            .
+          cp -R "$custom_files/lib/." lib/
+          cp -R "$custom_files/test/." test/
+          cp -R "$custom_files/web/." web/
+          cp "$custom_files/pubspec.yaml" "$custom_files/analysis_options.yaml" .
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: mobile
+        run: flutter analyze
+
+      - name: Test
+        working-directory: mobile
+        run: flutter test
+
+      - name: Build PWA
+        working-directory: mobile
+        run: flutter build web --release --base-href=/diffusion_portfolio/
+
+      - name: Save PWA build
+        uses: actions/upload-artifact@v4
+        with:
+          name: pwa-build
+          path: mobile/build/web
+
+  deploy-pwa:
+    if: github.ref == 'refs/heads/main'
+    needs: build-pwa
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Download PWA build
+        uses: actions/download-artifact@v4
+        with:
+          name: pwa-build
+          path: pwa-build
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload PWA
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pwa-build
+
+      - name: Deploy PWA
+        id: deployment
+        uses: actions/deploy-pages@v4
