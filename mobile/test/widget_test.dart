@@ -3,7 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets('shows Google connection and portfolio controls', (tester) async {
-    await tester.pumpWidget(const DiffusionPortfolioApp());
+    await tester.pumpWidget(
+      const DiffusionPortfolioApp(initializeGoogleSignIn: false),
+    );
 
     expect(find.text('Secure Google account'), findsOneWidget);
     expect(find.text('API URL'), findsOneWidget);
