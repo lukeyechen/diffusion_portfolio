@@ -27,10 +27,23 @@ expired, or unauthorized Google ID tokens.
 1. Register Android package `com.lukeyechen.diffusion_portfolio_mobile` with the
    release signing SHA-1 recorded in the Android build artifact.
 2. Create a Web OAuth client for the backend.
-3. Set GitHub Actions variable `GOOGLE_SERVER_CLIENT_ID` to the Web client ID.
-4. Set Cloud Build substitution `_GOOGLE_OAUTH_CLIENT_IDS` to the same Web
-   client ID.
-5. Keep `_ALLOWED_GOOGLE_EMAILS=st.yeyo@gmail.com` unless access should change.
+3. Use the same Web client ID in the mobile client and Cloud Build
+   `_GOOGLE_OAUTH_CLIENT_IDS` substitution.
+4. Keep the Cloud Build `_ALLOWED_GOOGLE_EMAILS` allowlist limited to approved
+   Google accounts.
+5. Add `https://lukeyechen.github.io` to the Web OAuth client's Authorized
+   JavaScript origins for the PWA.
+
+## iPhone PWA
+
+`.github/workflows/mobile-web.yml` builds the Flutter web app and deploys it to:
+
+`https://lukeyechen.github.io/diffusion_portfolio/`
+
+On iPhone, open that address in Safari, tap **Share**, and select **Add to Home
+Screen**. The installed PWA uses Google Sign-In and the same protected Cloud Run
+API as the Android app. The web page itself contains no portfolio data; protected
+API requests still require an approved Google account.
 
 ## Cloud builds
 
@@ -39,6 +52,8 @@ expired, or unauthorized Google ID tokens.
   the signing report needed for Android OAuth registration.
 - `.github/workflows/mobile-ios-check.yml` is manual-only and compiles the iOS app
   without signing on a hosted macOS runner.
+- `.github/workflows/mobile-web.yml` deploys the free iPhone-installable PWA to
+  GitHub Pages.
 
 The workflows generate the standard Flutter platform wrappers before compiling,
 so a developer does not need Flutter installed just to obtain the build artifact.
