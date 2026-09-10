@@ -6,6 +6,8 @@ import 'package:google_sign_in/google_sign_in.dart';
 class GoogleAuthController extends ChangeNotifier {
   static const serverClientId = String.fromEnvironment(
     'GOOGLE_SERVER_CLIENT_ID',
+    defaultValue:
+        '144819245123-2p7ck8l2jonk73sulhn67hhfbj5ti9ua.apps.googleusercontent.com',
   );
 
   final GoogleSignIn _signIn = GoogleSignIn.instance;
