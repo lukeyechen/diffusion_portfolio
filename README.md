@@ -1039,3 +1039,46 @@ for final 60–120 month tables.
 The underlying `monthly_rebalance_oos_comparison` call is now wrapped in `st.cache_data`.
 Re-running an identical B or C study in the same Streamlit cache no longer repeats all
 rolling neural retraining.
+
+
+## Mobile API
+
+The repository also exposes a FastAPI service for a future Flutter iPhone/Android app.
+It calls the same functions under `core/` as the upgraded Streamlit screens.
+
+Available endpoints:
+
+- `GET /health`
+- `POST /v1/portfolio/recommendation`
+- `POST /v1/backtest`
+- Interactive OpenAPI documentation at `/docs`
+
+Run the API locally:
+
+```bash
+APP_MODE=api uvicorn api:app --host=0.0.0.0 --port=8080
+```
+
+Example recommendation request:
+
+```json
+{
+  "tickers": ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN"],
+  "start_date": "2000-01-01",
+  "holding_period": "1 week",
+  "gamma": 3.0,
+  "turnover_penalty_bps": 25,
+  "max_long_weight": 0.4,
+  "replay_start": "2019-01-01"
+}
+```
+
+`cloudbuild.yaml` builds one container image and deploys it to two private Cloud Run
+services with zero minimum instances, one maximum instance, and concurrency set to one:
+
+- `diffusion-portfolio` runs the Streamlit interface.
+- `diffusion-portfolio-api` runs FastAPI with `APP_MODE=api`.
+
+Cloud Build runs the API contract tests before it pushes or deploys the image.
+
+The API is research software and returns a non-advice disclaimer in portfolio results.
