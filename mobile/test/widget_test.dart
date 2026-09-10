@@ -6,7 +6,8 @@ void main() {
     await tester.pumpWidget(const DiffusionPortfolioApp());
 
     expect(find.text('Secure Google account'), findsOneWidget);
-    expect(find.textContaining('OAuth client ID'), findsOneWidget);
+    expect(find.text('API URL'), findsOneWidget);
+    expect(find.textContaining('OAuth client ID'), findsNothing);
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
 
