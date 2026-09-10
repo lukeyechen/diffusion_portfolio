@@ -7,6 +7,7 @@ from typing import Annotated, Any, Literal
 import numpy as np
 import pandas as pd
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from pydantic import BaseModel, Field, field_validator
@@ -51,6 +52,16 @@ def _csv_environment(name: str) -> list[str]:
         for value in os.getenv(name, "").split(",")
         if value.strip()
     ]
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_csv_environment("ALLOWED_WEB_ORIGINS")
+    or ["https://lukeyechen.github.io"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+)
 
 
 def _authentication_error(detail: str) -> HTTPException:
