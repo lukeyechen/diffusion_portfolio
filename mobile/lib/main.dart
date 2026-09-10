@@ -10,7 +10,12 @@ void main() {
 }
 
 class DiffusionPortfolioApp extends StatelessWidget {
-  const DiffusionPortfolioApp({super.key});
+  const DiffusionPortfolioApp({
+    super.key,
+    this.initializeGoogleSignIn = true,
+  });
+
+  final bool initializeGoogleSignIn;
 
   @override
   Widget build(BuildContext context) {
@@ -21,13 +26,20 @@ class DiffusionPortfolioApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff3157d5)),
         useMaterial3: true,
       ),
-      home: const PortfolioHomePage(),
+      home: PortfolioHomePage(
+        initializeGoogleSignIn: initializeGoogleSignIn,
+      ),
     );
   }
 }
 
 class PortfolioHomePage extends StatefulWidget {
-  const PortfolioHomePage({super.key});
+  const PortfolioHomePage({
+    super.key,
+    this.initializeGoogleSignIn = true,
+  });
+
+  final bool initializeGoogleSignIn;
 
   @override
   State<PortfolioHomePage> createState() => _PortfolioHomePageState();
@@ -49,7 +61,9 @@ class _PortfolioHomePageState extends State<PortfolioHomePage> {
   void initState() {
     super.initState();
     _auth.addListener(_authChanged);
-    unawaited(_auth.initialize());
+    if (widget.initializeGoogleSignIn) {
+      unawaited(_auth.initialize());
+    }
   }
 
   void _authChanged() {
