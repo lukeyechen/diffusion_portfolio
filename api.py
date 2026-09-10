@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any, Literal
+import os
+from typing import Annotated, Any, Literal
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 from pydantic import BaseModel, Field, field_validator
 
 from config import DEFAULT_BETA, DEFAULT_GAMMA, DEFAULT_M, DEFAULT_MAX_LONG_WEIGHT
@@ -38,6 +41,76 @@ app = FastAPI(
         "turnover-controlled portfolio engine used by the Streamlit app."
     ),
 )
+
+_google_token_request = google_requests.Request()
+
+
+def _csv_environment(name: str) -> list[str]:
+    return [
+        value.strip()
+        for value in os.getenv(name, "").split(",")
+        if value.strip()
+    ]
+
+
+def _authentication_error(detail: str) -> HTTPException:
+    return HTTPException(
+        status_code=401,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def require_google_user(
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """Verify a Google OpenID Connect token and enforce the email allowlist."""
+    client_ids = _csv_environment("GOOGLE_OAUTH_CLIENT_IDS")
+    allowed_emails = {
+        email.casefold() for email in _csv_environment("ALLOWED_GOOGLE_EMAILS")
+    }
+    if not client_ids or not allowed_emails:
+        raise HTTPException(
+            status_code=503,
+            detail="Google sign-in is not configured on the server.",
+        )
+
+    scheme, separator, token = (authorization or "").partition(" ")
+    if separator != " " or scheme.casefold() != "bearer" or not token.strip():
+        raise _authentication_error("Sign in with Google to use this endpoint.")
+
+    claims: dict[str, Any] | None = None
+    for client_id in client_ids:
+        try:
+            claims = google_id_token.verify_oauth2_token(
+                token.strip(),
+                _google_token_request,
+                audience=client_id,
+            )
+            break
+        except ValueError:
+            continue
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="Google token verification is temporarily unavailable.",
+            ) from exc
+
+    if claims is None:
+        raise _authentication_error("Your Google sign-in has expired or is invalid.")
+
+    email = str(claims.get("email", "")).strip().casefold()
+    if claims.get("email_verified") is not True or not email:
+        raise _authentication_error("Google did not provide a verified email address.")
+    if email not in allowed_emails:
+        raise HTTPException(
+            status_code=403,
+            detail="This Google account is not allowed to use the portfolio API.",
+        )
+    if not claims.get("sub"):
+        raise _authentication_error("Google did not provide a valid account identifier.")
+
+    return claims
 
 
 class PortfolioSettings(BaseModel):
@@ -188,8 +261,22 @@ def health() -> dict[str, str]:
     return {"status": "ok", "service": "diffusion-portfolio-api"}
 
 
+@app.get("/v1/auth/me")
+def authenticated_user(
+    user: dict[str, Any] = Depends(require_google_user),
+) -> dict[str, str]:
+    return {
+        "status": "ok",
+        "email": str(user["email"]),
+        "name": str(user.get("name", "")),
+    }
+
+
 @app.post("/v1/portfolio/recommendation")
-def portfolio_recommendation(request: RecommendationRequest) -> dict[str, Any]:
+def portfolio_recommendation(
+    request: RecommendationRequest,
+    _user: dict[str, Any] = Depends(require_google_user),
+) -> dict[str, Any]:
     try:
         returns, cfg = _load_and_configure_returns(request)
         alpha = _rebalance_alpha(request)
@@ -292,7 +379,10 @@ def portfolio_recommendation(request: RecommendationRequest) -> dict[str, Any]:
 
 
 @app.post("/v1/backtest")
-def portfolio_backtest(request: BacktestRequest) -> dict[str, Any]:
+def portfolio_backtest(
+    request: BacktestRequest,
+    _user: dict[str, Any] = Depends(require_google_user),
+) -> dict[str, Any]:
     try:
         returns, cfg = _load_and_configure_returns(request)
         alpha = _rebalance_alpha(request)

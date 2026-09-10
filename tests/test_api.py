@@ -2,6 +2,8 @@ from datetime import date
 
 import numpy as np
 import pandas as pd
+import pytest
+from fastapi import HTTPException
 
 import api
 
@@ -26,8 +28,53 @@ def test_health_contract():
 def test_openapi_contract():
     paths = api.app.openapi()["paths"]
     assert "/health" in paths
+    assert "/v1/auth/me" in paths
     assert "/v1/portfolio/recommendation" in paths
     assert "/v1/backtest" in paths
+
+
+def test_google_auth_allows_only_configured_email(monkeypatch):
+    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_IDS", "web-client.apps.googleusercontent.com")
+    monkeypatch.setenv("ALLOWED_GOOGLE_EMAILS", "st.yeyo@gmail.com")
+    monkeypatch.setattr(
+        api.google_id_token,
+        "verify_oauth2_token",
+        lambda *args, **kwargs: {
+            "sub": "google-account-id",
+            "email": "st.yeyo@gmail.com",
+            "email_verified": True,
+        },
+    )
+
+    user = api.require_google_user("Bearer signed-google-id-token")
+    assert user["email"] == "st.yeyo@gmail.com"
+
+
+def test_google_auth_rejects_other_email(monkeypatch):
+    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_IDS", "web-client.apps.googleusercontent.com")
+    monkeypatch.setenv("ALLOWED_GOOGLE_EMAILS", "st.yeyo@gmail.com")
+    monkeypatch.setattr(
+        api.google_id_token,
+        "verify_oauth2_token",
+        lambda *args, **kwargs: {
+            "sub": "different-google-account",
+            "email": "someone@example.com",
+            "email_verified": True,
+        },
+    )
+
+    with pytest.raises(HTTPException) as error:
+        api.require_google_user("Bearer signed-google-id-token")
+    assert error.value.status_code == 403
+
+
+def test_google_auth_rejects_missing_token(monkeypatch):
+    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_IDS", "web-client.apps.googleusercontent.com")
+    monkeypatch.setenv("ALLOWED_GOOGLE_EMAILS", "st.yeyo@gmail.com")
+
+    with pytest.raises(HTTPException) as error:
+        api.require_google_user(None)
+    assert error.value.status_code == 401
 
 
 def test_recommendation_contract(monkeypatch):

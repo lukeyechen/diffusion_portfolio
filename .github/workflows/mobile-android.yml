@@ -3,7 +3,7 @@ name: Build Android mobile app
 on:
   workflow_dispatch:
   push:
-    branches: [main, mobile-app]
+    branches: [main, mobile-app, google-sign-in]
     paths:
       - "mobile/**"
       - ".github/workflows/mobile-android.yml"
@@ -31,6 +31,12 @@ jobs:
         with:
           channel: stable
           cache: true
+
+      - name: Preserve Android signing certificate
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: ${{ runner.os }}-diffusion-portfolio-debug-key-v1
 
       - name: Generate platform wrappers
         working-directory: mobile
@@ -64,11 +70,22 @@ jobs:
 
       - name: Build Android APK
         working-directory: mobile
-        run: flutter build apk --release
+        run: >-
+          flutter build apk --release
+          --dart-define=GOOGLE_SERVER_CLIENT_ID=${{ vars.GOOGLE_SERVER_CLIENT_ID }}
+
+      - name: Record Android signing certificate
+        working-directory: mobile
+        run: |
+          mkdir -p build/auth
+          (cd android && ./gradlew signingReport) > build/auth/android-signing-report.txt
+          sed -n '/Variant: release/,+8p' build/auth/android-signing-report.txt
 
       - name: Build Android App Bundle
         working-directory: mobile
-        run: flutter build appbundle --release
+        run: >-
+          flutter build appbundle --release
+          --dart-define=GOOGLE_SERVER_CLIENT_ID=${{ vars.GOOGLE_SERVER_CLIENT_ID }}
 
       - name: Upload Android builds
         uses: actions/upload-artifact@v4
@@ -79,3 +96,4 @@ jobs:
           path: |
             mobile/build/app/outputs/flutter-apk/app-release.apk
             mobile/build/app/outputs/bundle/release/app-release.aab
+            mobile/build/auth/android-signing-report.txt
