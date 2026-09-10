@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets('shows Google connection and portfolio controls', (tester) async {
+    // Google authentication itself is exercised on an Android device.
     await tester.pumpWidget(
       const DiffusionPortfolioApp(initializeGoogleSignIn: false),
     );
