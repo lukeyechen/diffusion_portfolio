@@ -1,0 +1,25 @@
+{
+  "name": "Diffusion Portfolio Management",
+  "short_name": "Diffusion Portfolio",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f6f8ff",
+  "theme_color": "#3157d5",
+  "description": "Private diffusion portfolio recommendations and backtests.",
+  "icons": [
+    {
+      "src": "icons/Icon-192.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/Icon-maskable-512.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
