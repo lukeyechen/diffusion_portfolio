@@ -35,19 +35,22 @@ def test_openapi_contract():
 
 def test_google_auth_allows_only_configured_email(monkeypatch):
     monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_IDS", "web-client.apps.googleusercontent.com")
-    monkeypatch.setenv("ALLOWED_GOOGLE_EMAILS", "st.yeyo@gmail.com")
+    monkeypatch.setenv(
+        "ALLOWED_GOOGLE_EMAILS",
+        "st.yeyo@gmail.com,paxabchao@gmail.com",
+    )
     monkeypatch.setattr(
         api.google_id_token,
         "verify_oauth2_token",
         lambda *args, **kwargs: {
             "sub": "google-account-id",
-            "email": "st.yeyo@gmail.com",
+            "email": "paxabchao@gmail.com",
             "email_verified": True,
         },
     )
 
     user = api.require_google_user("Bearer signed-google-id-token")
-    assert user["email"] == "st.yeyo@gmail.com"
+    assert user["email"] == "paxabchao@gmail.com"
 
 
 def test_google_auth_rejects_other_email(monkeypatch):
