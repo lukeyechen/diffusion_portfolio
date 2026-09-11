@@ -654,6 +654,18 @@ class _BacktestResult extends StatelessWidget {
     final gross = _number(result['gross_final_value']);
     final returnPercent = initial == 0 ? 0.0 : net / initial - 1.0;
     final metrics = _map(result['net_metrics']);
+    final strategy = '${result['strategy'] ?? ''}';
+    final summaries = _listOfMaps(result['all_method_summary']);
+    final summary = summaries.firstWhere(
+      (row) => '${row['Method'] ?? ''}' == strategy,
+      orElse: () => <String, dynamic>{},
+    );
+    final startDate = _dateOnly(summary['OOS start']);
+    final endDate = _dateOnly(summary['OOS end']);
+    final periodCount = summary['OOS periods'] is num
+        ? (summary['OOS periods'] as num).toInt().toString()
+        : '—';
+    final holdingPeriod = '${result['holding_period'] ?? '—'}';
 
     return Card(
       margin: const EdgeInsets.only(top: 14),
@@ -663,11 +675,20 @@ class _BacktestResult extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Backtest result', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 6),
+            const Text(
+              'These values cover the complete historical test, not one holding period.',
+              style: TextStyle(fontSize: 12),
+            ),
             const SizedBox(height: 12),
+            _MetricRow('Backtest dates', '$startDate to $endDate'),
+            _MetricRow('Holding/rebalance interval', holdingPeriod),
+            _MetricRow('Number of holding periods', periodCount),
+            const Divider(height: 24),
             _MetricRow('Starting value', _money(initial)),
-            _MetricRow('Final value after costs', _money(net)),
-            _MetricRow('Final value before costs', _money(gross)),
-            _MetricRow('Total return after costs', _percent(returnPercent)),
+            _MetricRow('Final value after costs (full test)', _money(net)),
+            _MetricRow('Final value before costs (full test)', _money(gross)),
+            _MetricRow('Total return after costs (full test)', _percent(returnPercent)),
             _MetricRow('Annualized return', _percent(metrics['CAGR'])),
             _MetricRow('Annualized volatility', _percent(metrics['Annualized vol'])),
             _MetricRow('Maximum drawdown', _percent(metrics['Max drawdown'])),
@@ -769,5 +790,14 @@ String _percent(dynamic value) => '${(_number(value) * 100).toStringAsFixed(2)}%
 
 String _decimal(dynamic value) =>
     value is num ? value.toDouble().toStringAsFixed(3) : '—';
+
+String _dateOnly(dynamic value) {
+  final text = value?.toString() ?? '';
+  if (text.isEmpty) {
+    return '—';
+  }
+  final timeSeparator = text.indexOf('T');
+  return timeSeparator > 0 ? text.substring(0, timeSeparator) : text;
+}
 
 String _money(double value) => '\$${value.toStringAsFixed(2)}';
