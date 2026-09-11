@@ -48,7 +48,7 @@ API requests still require an approved Google account.
 ## Private API allowlist
 
 The committed `cloudbuild.yaml` contains only a safe placeholder. Configure the
-real comma-separated `_ALLOWED_GOOGLE_EMAILS` value on the
+real semicolon-separated `_ALLOWED_GOOGLE_EMAILS` value on the
 `deploy-diffusion-portfolio` Cloud Build trigger before running a deployment.
 
 ## Cloud builds
