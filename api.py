@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 import os
+import re
 from typing import Annotated, Any, Literal
 
 import numpy as np
@@ -46,17 +47,18 @@ app = FastAPI(
 _google_token_request = google_requests.Request()
 
 
-def _csv_environment(name: str) -> list[str]:
+def _environment_list(name: str) -> list[str]:
+    """Read private list settings separated by commas or semicolons."""
     return [
         value.strip()
-        for value in os.getenv(name, "").split(",")
+        for value in re.split(r"[;,]", os.getenv(name, ""))
         if value.strip()
     ]
 
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_csv_environment("ALLOWED_WEB_ORIGINS")
+    allow_origins=_environment_list("ALLOWED_WEB_ORIGINS")
     or ["https://lukeyechen.github.io"],
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
@@ -76,9 +78,9 @@ def require_google_user(
     authorization: Annotated[str | None, Header()] = None,
 ) -> dict[str, Any]:
     """Verify a Google OpenID Connect token and enforce the email allowlist."""
-    client_ids = _csv_environment("GOOGLE_OAUTH_CLIENT_IDS")
+    client_ids = _environment_list("GOOGLE_OAUTH_CLIENT_IDS")
     allowed_emails = {
-        email.casefold() for email in _csv_environment("ALLOWED_GOOGLE_EMAILS")
+        email.casefold() for email in _environment_list("ALLOWED_GOOGLE_EMAILS")
     }
     if not client_ids or not allowed_emails:
         raise HTTPException(
