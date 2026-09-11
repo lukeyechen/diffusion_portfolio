@@ -47,25 +47,25 @@ def test_google_auth_allows_only_configured_email(monkeypatch):
     monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_IDS", "web-client.apps.googleusercontent.com")
     monkeypatch.setenv(
         "ALLOWED_GOOGLE_EMAILS",
-        "st.yeyo@gmail.com,paxabchao@gmail.com",
+        "first@example.com;second@example.com",
     )
     monkeypatch.setattr(
         api.google_id_token,
         "verify_oauth2_token",
         lambda *args, **kwargs: {
             "sub": "google-account-id",
-            "email": "paxabchao@gmail.com",
+            "email": "second@example.com",
             "email_verified": True,
         },
     )
 
     user = api.require_google_user("Bearer signed-google-id-token")
-    assert user["email"] == "paxabchao@gmail.com"
+    assert user["email"] == "second@example.com"
 
 
 def test_google_auth_rejects_other_email(monkeypatch):
     monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_IDS", "web-client.apps.googleusercontent.com")
-    monkeypatch.setenv("ALLOWED_GOOGLE_EMAILS", "st.yeyo@gmail.com")
+    monkeypatch.setenv("ALLOWED_GOOGLE_EMAILS", "first@example.com")
     monkeypatch.setattr(
         api.google_id_token,
         "verify_oauth2_token",
@@ -83,7 +83,7 @@ def test_google_auth_rejects_other_email(monkeypatch):
 
 def test_google_auth_rejects_missing_token(monkeypatch):
     monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_IDS", "web-client.apps.googleusercontent.com")
-    monkeypatch.setenv("ALLOWED_GOOGLE_EMAILS", "st.yeyo@gmail.com")
+    monkeypatch.setenv("ALLOWED_GOOGLE_EMAILS", "first@example.com")
 
     with pytest.raises(HTTPException) as error:
         api.require_google_user(None)

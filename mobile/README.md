@@ -29,8 +29,8 @@ expired, or unauthorized Google ID tokens.
 2. Create a Web OAuth client for the backend.
 3. Use the same Web client ID in the mobile client and Cloud Build
    `_GOOGLE_OAUTH_CLIENT_IDS` substitution.
-4. Keep the Cloud Build `_ALLOWED_GOOGLE_EMAILS` allowlist limited to approved
-   Google accounts.
+4. Store `_ALLOWED_GOOGLE_EMAILS` privately as a Cloud Build trigger
+   substitution. Do not commit personal email addresses to the repository.
 5. Add `https://lukeyechen.github.io` to the Web OAuth client's Authorized
    JavaScript origins for the PWA.
 
@@ -44,6 +44,12 @@ On iPhone, open that address in Safari, tap **Share**, and select **Add to Home
 Screen**. The installed PWA uses Google Sign-In and the same protected Cloud Run
 API as the Android app. The web page itself contains no portfolio data; protected
 API requests still require an approved Google account.
+
+## Private API allowlist
+
+The committed `cloudbuild.yaml` contains only a safe placeholder. Configure the
+real semicolon-separated `_ALLOWED_GOOGLE_EMAILS` value on the
+`deploy-diffusion-portfolio` Cloud Build trigger before running a deployment.
 
 ## Cloud builds
 
