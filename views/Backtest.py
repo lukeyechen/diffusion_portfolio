@@ -350,13 +350,36 @@ net = gross - cost * turnover
 metrics_gross = performance_metrics(gross, gamma=res["gamma"], periods_per_year=ppy)
 metrics_net = performance_metrics(net, gamma=res["gamma"], periods_per_year=ppy)
 
+backtest_start = str(pd.Timestamp(detail["Date"].iloc[0]).date())
+backtest_end = str(pd.Timestamp(detail["Date"].iloc[-1]).date())
+holding_period = str(res["holding_period"])
+period_count = len(detail)
+gross_final = capital * float(np.prod(1.0 + gross))
+net_final = capital * float(np.prod(1.0 + net))
+net_total_return = net_final / capital - 1.0
+
 st.subheader(f"3. Results — {strategy}")
+st.caption(
+    "These values cover the complete historical test, not one holding period."
+)
+
+d1, d2, d3 = st.columns(3)
+d1.metric("Backtest dates", f"{backtest_start} to {backtest_end}")
+d2.metric("Holding / rebalance interval", holding_period)
+d3.metric("Number of holding periods", f"{period_count:,}")
+
 r1, r2, r3, r4, r5 = st.columns(5)
-r1.metric("Net CAGR", f"{metrics_net['CAGR']:.2%}", delta=f"Gross {metrics_gross['CAGR']:.2%}")
-r2.metric("Net Sharpe", f"{metrics_net['Sharpe']:.3f}")
-r3.metric("Max drawdown", f"{metrics_net['Max drawdown']:.2%}")
-r4.metric("Average turnover", f"{float(np.mean(turnover)):.2%}")
-r5.metric("Ending wealth", f"${capital * (1.0 + metrics_net['Total return']):,.0f}")
+r1.metric("Starting value", f"${capital:,.2f}")
+r2.metric("Final value after costs (full test)", f"${net_final:,.2f}")
+r3.metric("Final value before costs (full test)", f"${gross_final:,.2f}")
+r4.metric("Total return after costs (full test)", f"{net_total_return:.2%}")
+r5.metric("Annualized return", f"{metrics_net['CAGR']:.2%}")
+
+s1, s2, s3, s4 = st.columns(4)
+s1.metric("Annualized volatility", f"{metrics_net['Annualized vol']:.2%}")
+s2.metric("Net Sharpe", f"{metrics_net['Sharpe']:.3f}")
+s3.metric("Maximum drawdown", f"{metrics_net['Max drawdown']:.2%}")
+s4.metric("Average turnover", f"{float(np.mean(turnover)):.2%}")
 
 wealth_index = pd.to_datetime(detail["Date"])
 wealth = pd.DataFrame(index=wealth_index)
