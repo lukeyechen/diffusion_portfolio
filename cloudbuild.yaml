@@ -54,7 +54,7 @@ steps:
       - "--image=us-east1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/diffusion-portfolio:$COMMIT_SHA"
       - "--region=us-east1"
       - "--platform=managed"
-      - "--set-env-vars=^@^APP_MODE=api@GOOGLE_OAUTH_CLIENT_IDS=$_GOOGLE_OAUTH_CLIENT_IDS@ALLOWED_GOOGLE_EMAILS=$_ALLOWED_GOOGLE_EMAILS@ALLOWED_WEB_ORIGINS=$_ALLOWED_WEB_ORIGINS"
+      - "--set-env-vars=^|^APP_MODE=api|GOOGLE_OAUTH_CLIENT_IDS=$_GOOGLE_OAUTH_CLIENT_IDS|ALLOWED_GOOGLE_EMAILS=$_ALLOWED_GOOGLE_EMAILS|ALLOWED_WEB_ORIGINS=$_ALLOWED_WEB_ORIGINS"
       - "--port=8080"
       - "--memory=2Gi"
       - "--cpu=1"
