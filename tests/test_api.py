@@ -136,6 +136,7 @@ def test_backtest_contract(monkeypatch):
         detail = pd.DataFrame(
             {
                 "Date": dates,
+                "T": [0.0, 0.10, 0.10],
                 f"return__{strategy}": [0.02, -0.01, 0.03],
                 f"turnover__{strategy}": [0.10, 0.08, 0.12],
             }
@@ -156,3 +157,6 @@ def test_backtest_contract(monkeypatch):
     assert len(result["wealth"]) == 3
     assert result["net_metrics"]["Final $10,000"] > 0
     assert result["latest_weights"][0]["AAPL"] == 0.20
+    assert result["t_selection"]["latest"] == 0.10
+    assert result["t_selection"]["most_frequent"] == 0.10
+    assert sum(row["count"] for row in result["t_selection"]["frequency"]) == 3
