@@ -155,6 +155,10 @@ def test_backtest_contract(monkeypatch):
 
     assert result["strategy"] == "Turnover-Controlled Exact Diffusion"
     assert len(result["wealth"]) == 3
+    assert len(result["periods"]) == 3
+    assert result["periods"][-1]["selected_t"] == 0.10
+    assert result["periods"][0]["trading_cost"] == pytest.approx(0.00025)
+    assert result["calendar_year_returns"][0]["year"] == returns.index[-1].year
     assert result["net_metrics"]["Final $10,000"] > 0
     assert result["latest_weights"][0]["AAPL"] == 0.20
     assert result["t_selection"]["latest"] == 0.10
