@@ -16,5 +16,13 @@ void main() {
 
     expect(find.text('Latest recommendation'), findsOneWidget);
     expect(find.text('Suggest weights'), findsOneWidget);
+
+    await tester.tap(find.text('Backtest'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Historical backtest'), findsOneWidget);
+    expect(find.text('Data history starts (YYYY-MM-DD)'), findsOneWidget);
+    expect(find.text('Holding period'), findsOneWidget);
+    expect(find.text('Estimation lookback observations'), findsOneWidget);
   });
 }
