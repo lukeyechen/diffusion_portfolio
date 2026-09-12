@@ -420,17 +420,17 @@ st.line_chart(wealth, use_container_width=True)
 
 metric_table = pd.DataFrame(
     [
-        {"Metric": "Total return", "Gross": metrics_gross["Total return"], "Net": metrics_net["Total return"]},
-        {"Metric": "CAGR", "Gross": metrics_gross["CAGR"], "Net": metrics_net["CAGR"]},
-        {"Metric": "Annualized volatility", "Gross": metrics_gross["Annualized vol"], "Net": metrics_net["Annualized vol"]},
-        {"Metric": "Sharpe", "Gross": metrics_gross["Sharpe"], "Net": metrics_net["Sharpe"]},
-        {"Metric": "Realized CER", "Gross": metrics_gross["Realized CER"], "Net": metrics_net["Realized CER"]},
-        {"Metric": "Max drawdown", "Gross": metrics_gross["Max drawdown"], "Net": metrics_net["Max drawdown"]},
-        {"Metric": "Positive periods", "Gross": metrics_gross["Positive periods"], "Net": metrics_net["Positive periods"]},
+        {"Metric": "Total return", "Gross": f"{metrics_gross['Total return']:.3%}", "Net": f"{metrics_net['Total return']:.3%}"},
+        {"Metric": "CAGR", "Gross": f"{metrics_gross['CAGR']:.3%}", "Net": f"{metrics_net['CAGR']:.3%}"},
+        {"Metric": "Annualized volatility", "Gross": f"{metrics_gross['Annualized vol']:.3%}", "Net": f"{metrics_net['Annualized vol']:.3%}"},
+        {"Metric": "Sharpe", "Gross": f"{metrics_gross['Sharpe']:.3f}", "Net": f"{metrics_net['Sharpe']:.3f}"},
+        {"Metric": "Realized CER", "Gross": f"{metrics_gross['Realized CER']:.3%}", "Net": f"{metrics_net['Realized CER']:.3%}"},
+        {"Metric": "Max drawdown", "Gross": f"{metrics_gross['Max drawdown']:.3%}", "Net": f"{metrics_net['Max drawdown']:.3%}"},
+        {"Metric": "Positive periods", "Gross": f"{metrics_gross['Positive periods']:.3%}", "Net": f"{metrics_net['Positive periods']:.3%}"},
     ]
 )
 st.dataframe(
-    metric_table.style.format({"Gross": "{:.3%}", "Net": "{:.3%}"}),
+    metric_table,
     use_container_width=True,
     hide_index=True,
 )
@@ -468,8 +468,10 @@ st.dataframe(
 )
 
 with st.expander("Rolling OOS detail"):
+    period_display = period_df.copy()
+    period_display["Date"] = period_display["Date"].dt.strftime("%Y-%m-%d")
     st.dataframe(
-        period_df.style.format(
+        period_display.style.format(
             {
                 "Gross return": "{:.3%}",
                 "Turnover": "{:.2%}",
@@ -484,7 +486,7 @@ with st.expander("Rolling OOS detail"):
 
 st.download_button(
     "⬇ Download backtest history (.csv)",
-    data=period_df.to_csv(index=False).encode("utf-8"),
+    data=period_display.to_csv(index=False).encode("utf-8"),
     file_name=f"backtest_{holding_period.replace(' ', '_')}_{strategy.replace(' ', '_').replace('/', '_')}.csv",
     mime="text/csv",
     use_container_width=True,
