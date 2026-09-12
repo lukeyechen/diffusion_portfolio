@@ -666,6 +666,8 @@ class _BacktestResult extends StatelessWidget {
         ? (summary['OOS periods'] as num).toInt().toString()
         : '—';
     final holdingPeriod = '${result['holding_period'] ?? '—'}';
+    final tSelection = _map(result['t_selection']);
+    final tFrequency = _listOfMaps(tSelection['frequency']);
 
     return Card(
       margin: const EdgeInsets.only(top: 14),
@@ -691,7 +693,36 @@ class _BacktestResult extends StatelessWidget {
             _MetricRow('Total return after costs (full test)', _percent(returnPercent)),
             _MetricRow('Annualized return', _percent(metrics['CAGR'])),
             _MetricRow('Annualized volatility', _percent(metrics['Annualized vol'])),
+            _MetricRow('Net Sharpe', _decimal(metrics['Sharpe'])),
             _MetricRow('Maximum drawdown', _percent(metrics['Max drawdown'])),
+            _MetricRow('Average turnover', _percent(summary['Average turnover'])),
+            const Divider(height: 24),
+            Text(
+              'Selected diffusion horizon T',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 6),
+            _MetricRow('Latest selected T', _decimal(tSelection['latest'])),
+            _MetricRow('Most frequent T', _decimal(tSelection['most_frequent'])),
+            _MetricRow('Median T', _decimal(tSelection['median'])),
+            _MetricRow('Mean T', _decimal(tSelection['mean'])),
+            _MetricRow(
+              'T > 0 selection share',
+              _percent(tSelection['positive_fraction']),
+            ),
+            if (tFrequency.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Selection frequency',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              ...tFrequency.map(
+                (row) => _MetricRow(
+                  'T = ${_decimal(row['t'])}',
+                  '${_integer(row['count'])} periods (${_percent(row['fraction'])})',
+                ),
+              ),
+            ],
             const Divider(height: 24),
             const Text(
               'Historical research simulation; past performance does not guarantee future results.',
@@ -787,6 +818,9 @@ List<Map<String, dynamic>> _listOfMaps(dynamic value) => value is List
 double _number(dynamic value) => value is num ? value.toDouble() : 0.0;
 
 String _percent(dynamic value) => '${(_number(value) * 100).toStringAsFixed(2)}%';
+
+String _integer(dynamic value) =>
+    value is num ? value.toInt().toString() : '—';
 
 String _decimal(dynamic value) =>
     value is num ? value.toDouble().toStringAsFixed(3) : '—';
