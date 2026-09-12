@@ -363,23 +363,48 @@ st.caption(
     "These values cover the complete historical test, not one holding period."
 )
 
-d1, d2, d3 = st.columns(3)
-d1.metric("Backtest dates", f"{backtest_start} to {backtest_end}")
-d2.metric("Holding / rebalance interval", holding_period)
-d3.metric("Number of holding periods", f"{period_count:,}")
+st.markdown(f"**Backtest dates:** {backtest_start} to {backtest_end}")
+d1, d2 = st.columns(2)
+d1.metric("Holding / rebalance interval", holding_period)
+d2.metric("Number of holding periods", f"{period_count:,}")
 
-r1, r2, r3, r4, r5 = st.columns(5)
+r1, r2, r3 = st.columns(3)
 r1.metric("Starting value", f"${capital:,.2f}")
-r2.metric("Final value after costs (full test)", f"${net_final:,.2f}")
-r3.metric("Final value before costs (full test)", f"${gross_final:,.2f}")
-r4.metric("Total return after costs (full test)", f"{net_total_return:.2%}")
-r5.metric("Annualized return", f"{metrics_net['CAGR']:.2%}")
+r2.metric("Final after costs", f"${net_final:,.2f}")
+r3.metric("Final before costs", f"${gross_final:,.2f}")
 
-s1, s2, s3, s4 = st.columns(4)
-s1.metric("Annualized volatility", f"{metrics_net['Annualized vol']:.2%}")
-s2.metric("Net Sharpe", f"{metrics_net['Sharpe']:.3f}")
-s3.metric("Maximum drawdown", f"{metrics_net['Max drawdown']:.2%}")
-s4.metric("Average turnover", f"{float(np.mean(turnover)):.2%}")
+r4, r5, r6 = st.columns(3)
+r4.metric("Total return after costs", f"{net_total_return:.2%}")
+r5.metric("Annualized return", f"{metrics_net['CAGR']:.2%}")
+r6.metric("Annualized volatility", f"{metrics_net['Annualized vol']:.2%}")
+
+s1, s2, s3 = st.columns(3)
+s1.metric("Net Sharpe", f"{metrics_net['Sharpe']:.3f}")
+s2.metric("Maximum drawdown", f"{metrics_net['Max drawdown']:.2%}")
+s3.metric("Average turnover", f"{float(np.mean(turnover)):.2%}")
+
+t_values = detail["T"].to_numpy(dtype=float)
+t_counts = pd.Series(t_values).value_counts().sort_index()
+most_frequent_t = float(t_counts[t_counts == t_counts.max()].index.min())
+t1, t2, t3, t4 = st.columns(4)
+t1.metric("Latest selected T", f"{t_values[-1]:.3f}")
+t2.metric("Most frequent T", f"{most_frequent_t:.3f}")
+t3.metric("Median T", f"{float(np.median(t_values)):.3f}")
+t4.metric("Mean T", f"{float(np.mean(t_values)):.3f}")
+
+t_frequency = pd.DataFrame(
+    {
+        "T": t_counts.index.to_numpy(dtype=float),
+        "Selected periods": t_counts.to_numpy(dtype=int),
+        "Selection share": t_counts.to_numpy(dtype=float) / len(t_values),
+    }
+)
+with st.expander("Selected T frequency"):
+    st.dataframe(
+        t_frequency.style.format({"T": "{:.3f}", "Selection share": "{:.2%}"}),
+        use_container_width=True,
+        hide_index=True,
+    )
 
 wealth_index = pd.to_datetime(detail["Date"])
 wealth = pd.DataFrame(index=wealth_index)
