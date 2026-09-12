@@ -441,6 +441,29 @@ def portfolio_backtest(
             for index, value in enumerate(detail["Date"])
         ]
 
+        periods = [
+            {
+                "date": pd.Timestamp(value).date().isoformat(),
+                "gross_return": float(gross[index]),
+                "turnover": float(turnover[index]),
+                "trading_cost": float(cost * turnover[index]),
+                "net_return": float(net[index]),
+                "selected_t": float(detail["T"].iloc[index]),
+                "year": int(pd.Timestamp(value).year),
+            }
+            for index, value in enumerate(detail["Date"])
+        ]
+        calendar_year_returns = [
+            {
+                "year": int(year),
+                "net_return": float(
+                    np.prod(1.0 + group["net_return"].to_numpy(dtype=float))
+                    - 1.0
+                ),
+            }
+            for year, group in pd.DataFrame(periods).groupby("year")
+        ]
+
         t_values = detail["T"].to_numpy(dtype=float)
         t_counts = pd.Series(t_values).value_counts().sort_index()
         max_t_count = int(t_counts.max())
@@ -477,6 +500,8 @@ def portfolio_backtest(
                 key: _finite_or_none(value) for key, value in net_metrics.items()
             },
             "wealth": wealth,
+            "periods": periods,
+            "calendar_year_returns": calendar_year_returns,
             "all_method_summary": _records(summary),
             "latest_weights": _records(latest),
             "t_diagnostics": _records(t_diagnostics),
