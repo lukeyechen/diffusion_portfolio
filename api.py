@@ -441,6 +441,28 @@ def portfolio_backtest(
             for index, value in enumerate(detail["Date"])
         ]
 
+        t_values = detail["T"].to_numpy(dtype=float)
+        t_counts = pd.Series(t_values).value_counts().sort_index()
+        max_t_count = int(t_counts.max())
+        most_frequent_t = float(
+            t_counts[t_counts == max_t_count].index.min()
+        )
+        t_selection = {
+            "latest": float(t_values[-1]),
+            "most_frequent": most_frequent_t,
+            "median": float(np.median(t_values)),
+            "mean": float(np.mean(t_values)),
+            "positive_fraction": float(np.mean(t_values > 0)),
+            "frequency": [
+                {
+                    "t": float(t_value),
+                    "count": int(count),
+                    "fraction": float(count / len(t_values)),
+                }
+                for t_value, count in t_counts.items()
+            ],
+        }
+
         return {
             "strategy": request.strategy,
             "holding_period": request.holding_period,
@@ -458,6 +480,7 @@ def portfolio_backtest(
             "all_method_summary": _records(summary),
             "latest_weights": _records(latest),
             "t_diagnostics": _records(t_diagnostics),
+            "t_selection": t_selection,
             "disclaimer": "Historical research simulation; past performance does not guarantee future results.",
         }
     except ValueError as exc:
