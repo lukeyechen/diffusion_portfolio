@@ -14,7 +14,20 @@ from .turnover_upgrade import (
 )
 
 
-CANDIDATE_T = [0.0, 0.02, 0.05, 0.10, 0.20, 0.30, 0.50, 0.75, 1.00]
+CANDIDATE_T = [
+    0.0,
+    0.02,
+    0.05,
+    0.10,
+    0.20,
+    0.30,
+    0.50,
+    0.75,
+    1.00,
+    1.50,
+    2.00,
+    3.00,
+]
 
 # About ten years of estimation history with one-year inner validation blocks.
 HORIZON_PRESETS: dict[str, dict[str, int | str]] = {
