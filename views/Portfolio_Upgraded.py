@@ -12,6 +12,7 @@ from core.metrics import (
     portfolio_volatility,
     sharpe_ratio,
 )
+from core.predictive_means import MEAN_MODELS
 from core.moments import covariance_condition_number, sample_moments
 from core.portfolio_rules import compute_weights
 from core.short_horizon_portfolio import (
@@ -48,6 +49,7 @@ def _cached_latest_recommendation(
     rebalance_alpha,
     max_long_weight,
     replay_start,
+    mean_model,
 ):
     return replay_latest_recommendation(
         returns,
@@ -61,6 +63,7 @@ def _cached_latest_recommendation(
         rebalance_alpha=float(rebalance_alpha),
         max_long_weight=float(max_long_weight),
         replay_start=replay_start,
+        mean_model=mean_model,
     )
 
 
@@ -154,6 +157,18 @@ with st.expander("Show latest returns"):
 # Settings
 # -----------------------------------------------------------------------------
 st.subheader("2. Upgraded Diffusion / Portfolio Settings")
+
+mean_model = st.selectbox(
+    "Expected return model", list(MEAN_MODELS), index=0,
+    help="Forecasts replace the mean only; covariance and portfolio constraints use the existing engine.",
+)
+if mean_model != MEAN_MODELS[0]:
+    st.caption(
+        "Forecasts target the NEXT selected holding period using the last return, trailing "
+        "3-period mean and volatility. Inputs are simple returns; the risk-free rate is assumed zero. "
+        "Diffusion forecasting selects its own b by past prediction MSE, with OLS included. "
+        "Portfolio improvement is experimental, not guaranteed by either paper."
+    )
 
 required_min = int(cfg["min_train_size"]) + int(cfg["inner_folds"]) * int(cfg["validation_size"])
 default_lookback = int(cfg["lookback"])
@@ -280,6 +295,7 @@ if run:
             rebalance_alpha,
             max_long_weight,
             replay_start,
+            mean_model,
         )
 
     x = returns.iloc[-int(lookback):].to_numpy(dtype=float)
@@ -305,6 +321,7 @@ if run:
 
     st.session_state["upgraded_portfolio_result"] = {
         "rec": rec,
+        "mean_model": mean_model,
         "holding_period": holding_period,
         "cfg": dict(cfg),
         "returns": returns.copy(),
@@ -331,6 +348,9 @@ mu_used = np.asarray(rec["mu"], dtype=float)
 sigma_used = np.asarray(rec["sigma"], dtype=float)
 
 st.subheader("3. Recommended Weights")
+st.caption(f"Saved result: {rec.get('mean_model', MEAN_MODELS[0])}; allocation for the next {res['holding_period']}.")
+if mean_model != rec.get("mean_model", MEAN_MODELS[0]):
+    st.warning("The displayed result uses the previous mean model. Run the portfolio again to apply your selection.")
 weights_df = pd.DataFrame(
     {
         "Asset": assets,
@@ -388,6 +408,32 @@ p3.metric("Sharpe / period", f"{sharpe:.3f}")
 p4.metric("CER / period", f"{cer:.3%}")
 p5.metric("κ(Σ)", f"{condition:,.1f}")
 
+forecast = rec.get("forecast")
+if forecast is not None:
+    st.markdown("**Expected returns for the next holding period**")
+    forecast_table = pd.DataFrame({
+        "Asset": assets,
+        "Original diffusion mean": rec["original_mu"],
+        "OLS forecast": forecast["ols"],
+        "Selected mean": mu_used,
+        "Fit status": forecast["status"],
+    })
+    st.dataframe(forecast_table.style.format({
+        "Original diffusion mean": "{:.3%}", "OLS forecast": "{:.3%}", "Selected mean": "{:.3%}"
+    }), hide_index=True, use_container_width=True)
+    st.caption(
+        f"Forecast b={forecast['b']:g}, a=b/n={forecast['a']:.6f}; "
+        f"{forecast['n_pairs']} training pairs. {forecast['selection']}. "
+        "Forecast a=0 is OLS. The displayed portfolio T is a separate parameter."
+    )
+    with st.expander("Forecast validation and scaling"):
+        st.write("Fixed percentage-point units for predictors and response; no sample demeaning. "
+                 "Each validation forecast is refitted before its held-out return. "
+                 "Singular joint covariance explicitly falls back to OLS.")
+        st.dataframe(pd.DataFrame(forecast["validation"]), hide_index=True)
+    st.download_button("Download return forecasts (.csv)", forecast_table.to_csv(index=False).encode(),
+                       file_name="return_forecasts.csv", mime="text/csv")
+
 compare_df = pd.DataFrame(
     {
         "Asset": assets,
@@ -410,7 +456,8 @@ st.dataframe(
 portfolio_revision = int(st.session_state.get("portfolio_revision", 0)) + 1
 st.session_state["portfolio_revision"] = portfolio_revision
 st.session_state["shared_current_window"] = {
-    "version": 3,
+    "version": 4,
+    "mean_model": rec.get("mean_model", MEAN_MODELS[0]),
     "portfolio_revision": portfolio_revision,
     "upgraded": True,
     "estimator": "Diffusion",
