@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from .predictive_means import MEAN_MODELS, forecast_means
 from .moments import sample_moments
 from .portfolio_rules import compute_weights
 from .turnover_upgrade import (
@@ -250,8 +251,11 @@ def turnover_controlled_target(
     turnover_penalty: float = 0.0025,
     rebalance_alpha: float = 1.0,
     max_long_weight: float = 0.40,
+    mean_model: str = "Original diffusion mean",
 ) -> dict:
     """Best-T exact diffusion target with turnover penalty and optional smoothing."""
+    if mean_model not in MEAN_MODELS:
+        raise ValueError(f"Unknown expected-return model: {mean_model}")
     t_best, t_results = select_best_nested_t(
         x,
         cfg,
@@ -269,6 +273,11 @@ def turnover_controlled_target(
         beta=float(beta),
         n_steps=int(n_steps),
     )
+    original_mu = mu_d.copy()
+    forecast = None
+    if mean_model != MEAN_MODELS[0]:
+        forecast = forecast_means(x, tune=mean_model == "Diffusion forecast")
+        mu_d = forecast["ols" if mean_model == "OLS forecast" else "diffusion"]
     raw = solve_mv_turnover_aware(
         mu_d,
         sigma_d,
@@ -286,6 +295,9 @@ def turnover_controlled_target(
     )
     final = project_long_only_capped(final, float(max_long_weight))
     return {
+        "mean_model": mean_model,
+        "original_mu": original_mu,
+        "forecast": forecast,
         "T": t_best,
         "t_results": t_results,
         "mu": mu_d,
@@ -311,10 +323,13 @@ def replay_latest_recommendation(
     rebalance_alpha: float = 1.0,
     max_long_weight: float = 0.40,
     replay_start: str | pd.Timestamp | None = "2019-01-01",
+    mean_model: str = "Original diffusion mean",
 ) -> dict:
     """Replay the strategy state, then compute the recommendation for the next period."""
     if not isinstance(returns, pd.DataFrame) or returns.empty:
         raise ValueError("returns must be a non-empty DataFrame.")
+    if not returns.index.is_monotonic_increasing or not returns.index.is_unique:
+        raise ValueError("Return dates must be unique and sorted from oldest to newest.")
     lookback = int(cfg["lookback"])
     if len(returns) <= lookback:
         raise ValueError(
@@ -348,6 +363,7 @@ def replay_latest_recommendation(
             beta=beta,
             n_steps=n_steps,
             candidate_t=candidate_t,
+            mean_model=mean_model,
             turnover_penalty=turnover_penalty,
             rebalance_alpha=rebalance_alpha,
             max_long_weight=max_long_weight,
@@ -366,6 +382,7 @@ def replay_latest_recommendation(
         beta=beta,
         n_steps=n_steps,
         candidate_t=candidate_t,
+        mean_model=mean_model,
         turnover_penalty=turnover_penalty,
         rebalance_alpha=rebalance_alpha,
         max_long_weight=max_long_weight,
@@ -392,7 +409,7 @@ def performance_metrics(r: np.ndarray, *, gamma: float, periods_per_year: int) -
     vol = float(np.std(r, ddof=1) * np.sqrt(periods_per_year)) if len(r) > 1 else np.nan
     mean_ann = float(np.mean(r) * periods_per_year)
     sharpe = mean_ann / vol if np.isfinite(vol) and vol > 0 else np.nan
-    peak = np.maximum.accumulate(wealth)
+    peak = np.maximum.accumulate(np.r_[1.0, wealth])[1:]
     max_dd = float(np.min(wealth / peak - 1.0))
     var_ann = float(np.var(r, ddof=1) * periods_per_year) if len(r) > 1 else np.nan
     cer = mean_ann - 0.5 * float(gamma) * var_ann if np.isfinite(var_ann) else np.nan
@@ -422,10 +439,13 @@ def run_oos_comparison(
     max_long_weight: float = 0.40,
     oos_start: str | pd.Timestamp = "2019-01-01",
     costs: tuple[float, ...] = (0.0010, 0.0025),
+    include_forecasts: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Rolling OOS comparison used by the upgraded Method Comparison UI."""
     if not isinstance(returns, pd.DataFrame) or returns.empty:
         raise ValueError("returns must be a non-empty DataFrame.")
+    if not returns.index.is_monotonic_increasing or not returns.index.is_unique:
+        raise ValueError("Return dates must be unique and sorted from oldest to newest.")
     lookback = int(cfg["lookback"])
     ppy = int(cfg["periods_per_year"])
     if len(returns) <= lookback:
@@ -440,6 +460,9 @@ def run_oos_comparison(
         "50% Exact Diff + 50% EW",
         method_tc,
     ]
+    forecast_methods = {"OLS Forecast + Diffusion Risk": "ols", "Diffusion Forecast + Diffusion Risk": "diffusion"}
+    if include_forecasts:
+        methods.extend(forecast_methods)
     prev_post: dict[str, np.ndarray | None] = {name: None for name in methods}
     rows: list[dict] = []
     t_values: list[float] = []
@@ -519,6 +542,30 @@ def run_oos_comparison(
             "Date": pd.Timestamp(returns.index[i]),
             "T": float(t_best),
         }
+        if include_forecasts:
+            forecasts = forecast_means(x)
+            row["Forecast b"] = forecasts["b"]
+            row["Forecast a"] = forecasts["a"]
+            row["Forecast fallback assets"] = sum("fallback" in v for v in forecasts["status"])
+            row["Forecast pairs"] = forecasts["n_pairs"]
+            for name, key in forecast_methods.items():
+                old = prev_post[name]
+                old = ew.copy() if old is None else old
+                target = solve_mv_turnover_aware(
+                    forecasts[key], sigma_d, previous_weights=old,
+                    turnover_penalty=float(turnover_penalty), gamma=float(gamma),
+                    mode="Long-only", max_long_weight=float(max_long_weight),
+                )
+                weights[name] = project_long_only_capped(
+                    partial_rebalance(target, old, alpha=float(rebalance_alpha)), max_long_weight
+                )
+                row[f"forecast_mse__{name}"] = float(np.mean((forecasts[key] - realized)**2))
+            row[f"forecast_mse__{method_tc}"] = float(np.mean((mu_d - realized)**2))
+            for j, asset in enumerate(returns.columns):
+                row[f"forecast_original__{asset}"] = float(mu_d[j])
+                row[f"forecast_ols__{asset}"] = float(forecasts["ols"][j])
+                row[f"forecast_diffusion__{asset}"] = float(forecasts["diffusion"][j])
+                row[f"realized__{asset}"] = float(realized[j])
         for name, w in weights.items():
             old = prev_post[name]
             turnover = 0.0 if old is None else portfolio_turnover(w, old)
@@ -541,6 +588,8 @@ def run_oos_comparison(
             "Average turnover": float(turnover.mean()),
             **performance_metrics(gross, gamma=gamma, periods_per_year=ppy),
         }
+        mse_col = f"forecast_mse__{name}"
+        out["Forecast MSE"] = float(detail[mse_col].mean()) if mse_col in detail else np.nan
         for cost in costs:
             bps = int(round(cost * 10000))
             net = performance_metrics(
@@ -548,6 +597,8 @@ def run_oos_comparison(
                 gamma=gamma,
                 periods_per_year=ppy,
             )
+            out[f"Net CER {bps}bps"] = net["Realized CER"]
+            out[f"Net Max drawdown {bps}bps"] = net["Max drawdown"]
             out[f"Net CAGR {bps}bps"] = net["CAGR"]
             out[f"Net Sharpe {bps}bps"] = net["Sharpe"]
             out[f"Net Final $10,000 {bps}bps"] = net["Final $10,000"]

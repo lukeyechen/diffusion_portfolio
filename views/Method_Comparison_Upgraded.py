@@ -42,6 +42,7 @@ def _cached_oos(
     rebalance_alpha,
     max_long_weight,
     oos_start,
+    include_forecasts,
 ):
     return run_oos_comparison(
         returns,
@@ -56,6 +57,7 @@ def _cached_oos(
         max_long_weight=float(max_long_weight),
         oos_start=oos_start,
         costs=(0.0010, 0.0025),
+        include_forecasts=include_forecasts,
     )
 
 
@@ -100,6 +102,7 @@ if isinstance(shared, dict) and shared.get("upgraded"):
         use_container_width=True,
         hide_index=True,
     )
+    st.caption(f"Saved expected-return model: {shared.get('mean_model', 'Original diffusion mean')}")
     st.success(
         "The current Portfolio state uses the same exact-moment / nested-T / turnover-control definitions as this page."
     )
@@ -179,6 +182,15 @@ oos_start = st.text_input(
     help="Every tested period uses only data available before that realized holding-period return.",
 )
 
+include_forecasts = st.checkbox("Compare OLS and diffusion forecasts with diffusion risk", value=True)
+if include_forecasts:
+    st.caption(
+        "Adds two strategies with the same diffusion covariance, caps, turnover penalty and "
+        "rebalance rule as Turnover-Controlled Exact Diffusion. Each has its own drifted holdings. "
+        "Forecast b is selected only on past validation returns. The risk-free rate is assumed zero. "
+        "Compare net results; lower prediction MSE alone does not guarantee better portfolios."
+    )
+
 with st.expander("Methods and nested-T definition"):
     st.markdown(
         """
@@ -255,6 +267,7 @@ if st.button("▶ Run upgraded method comparison", type="primary", use_container
             alpha,
             max_long_weight,
             oos_start,
+            include_forecasts,
         )
         summary.insert(0, "Horizon", horizon)
         summary.insert(1, "Rebalance step", alpha)
@@ -298,10 +311,14 @@ show_cols = [
     "Average turnover",
     "Net CAGR 10bps",
     "Net CAGR 25bps",
+    "Net CER 25bps",
+    "Net Max drawdown 25bps",
+    "Forecast MSE",
+    "Net Final $10,000 25bps",
     "Final $10,000",
 ]
 st.dataframe(
-    summary[show_cols].style.format(
+    summary.reindex(columns=show_cols).style.format(
         {
             "CAGR": "{:.2%}",
             "Sharpe": "{:.3f}",
@@ -311,6 +328,10 @@ st.dataframe(
             "Net CAGR 10bps": "{:.2%}",
             "Net CAGR 25bps": "{:.2%}",
             "Final $10,000": "${:,.0f}",
+            "Net Final $10,000 25bps": "${:,.0f}",
+            "Net CER 25bps": "{:.2%}",
+            "Net Max drawdown 25bps": "{:.2%}",
+            "Forecast MSE": "{:.6g}",
         }
     ),
     use_container_width=True,

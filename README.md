@@ -1082,3 +1082,16 @@ services with zero minimum instances, one maximum instance, and concurrency set 
 Cloud Build runs the API contract tests before it pushes or deploys the image.
 
 The API is research software and returns a non-advice disclaimer in portfolio results.
+
+
+## Predictive means (Streamlit research option)
+
+Portfolio → Expected return model now supports OLS forecast and Diffusion forecast.
+Both replace only the mean in the existing diffusion-risk optimizer. Method
+Comparison can compare them with the original turnover-controlled strategy using
+the same risk matrix, constraints and costs. Outputs include forecast MSE and net
+portfolio utility, drawdown and wealth. Original means remain the default.
+
+See [implementation and proved utility comparison](docs/predictive_portfolio_theory.md)
+for time alignment, fixed scaling, parameter selection, fallback behavior, and
+why neither existing paper guarantees that the combined portfolio improves.
