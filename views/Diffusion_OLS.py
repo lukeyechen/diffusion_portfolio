@@ -7,13 +7,33 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from core.data import download_yahoo_returns
 from core.diffusion_exposure import (
     backtest_exposure,
+    build_yahoo_exposure_data,
     demo_exposure_data,
     latest_exposure,
     prepare_exposure_data,
     summarize_exposure,
 )
+from core.short_horizon_portfolio import (
+    HORIZON_PRESETS,
+    aggregate_nonoverlapping,
+    get_horizon_preset,
+)
+
+
+@st.cache_data(show_spinner=False)
+def _download_holding_returns(tickers, start, holding_period):
+    cfg = get_horizon_preset(holding_period)
+    interval = "1wk" if cfg["source"] == "weekly" else "1mo"
+    base = download_yahoo_returns(
+        tickers,
+        start=start,
+        end=None,
+        interval=interval,
+    )
+    return aggregate_nonoverlapping(base, int(cfg["block_size"]))
 
 
 @st.cache_data(show_spinner=False)
@@ -79,14 +99,109 @@ with st.expander("Model and timing assumptions"):
 # 1. Data
 # -----------------------------------------------------------------------------
 st.subheader("1. Point-in-time data")
+if st.session_state.get("diff_ols_data_ui_version") != 2:
+    st.session_state["diff_ols_source"] = "Yahoo Finance"
+    st.session_state["diff_ols_data_ui_version"] = 2
+    st.session_state.pop("diff_ols_output", None)
 source = st.radio(
     "Data source",
-    ["Synthetic demonstration", "Upload CSV"],
+    ["Yahoo Finance", "Upload CSV", "Synthetic demonstration"],
     horizontal=True,
     key="diff_ols_source",
 )
 
-if source == "Synthetic demonstration":
+auto_current_predictors = None
+yahoo_periods_per_year = None
+if source == "Yahoo Finance":
+    y1, y2, y3, y4 = st.columns([2, 1, 1, 1])
+    with y1:
+        tickers_text = st.text_input(
+            "Tickers",
+            st.session_state.get(
+                "diff_ols_tickers", "AAPL,MSFT,NVDA,GOOGL,AMZN"
+            ),
+            key="diff_ols_ticker_text",
+        )
+    with y2:
+        start_date = st.text_input(
+            "Start date",
+            st.session_state.get("diff_ols_start", "2000-01-01"),
+            key="diff_ols_start_text",
+        )
+    with y3:
+        holding_period = st.selectbox(
+            "Holding / rebalance period",
+            list(HORIZON_PRESETS.keys()),
+            index=0,
+            key="diff_ols_horizon",
+        )
+    with y4:
+        annual_risk_free_percent = st.number_input(
+            "Annual risk-free rate (%)",
+            min_value=-99.0,
+            max_value=100.0,
+            value=4.0,
+            step=0.25,
+            key="diff_ols_annual_rf",
+            help="A constant annual rate used to form excess returns. Change it to match your research assumption.",
+        )
+
+    tickers = tuple(
+        dict.fromkeys(
+            value.strip().upper()
+            for value in tickers_text.split(",")
+            if value.strip()
+        )
+    )
+    yahoo_signature = (tickers, start_date, holding_period)
+    downloaded_returns = None
+    if st.button(
+        "Download / refresh Diffusion OLS data",
+        type="primary",
+        width="stretch",
+    ):
+        if not tickers:
+            st.error("Enter at least one ticker.")
+            st.stop()
+        try:
+            with st.spinner(f"Downloading {holding_period} adjusted returns..."):
+                downloaded_returns = _download_holding_returns(
+                    tickers, start_date, holding_period
+                )
+            st.session_state["diff_ols_yahoo_returns"] = downloaded_returns
+            st.session_state["diff_ols_yahoo_signature"] = yahoo_signature
+            st.session_state["diff_ols_tickers"] = tickers_text
+            st.session_state["diff_ols_start"] = start_date
+        except (ValueError, RuntimeError) as error:
+            st.error(str(error))
+            st.stop()
+    elif st.session_state.get("diff_ols_yahoo_signature") == yahoo_signature:
+        downloaded_returns = st.session_state.get("diff_ols_yahoo_returns")
+
+    if downloaded_returns is None:
+        st.info("Enter your stock tickers, then click Download / refresh Diffusion OLS data.")
+        st.stop()
+
+    cfg = get_horizon_preset(holding_period)
+    yahoo_periods_per_year = int(cfg["periods_per_year"])
+    annual_risk_free = float(annual_risk_free_percent) / 100.0
+    per_period_risk_free = (
+        (1.0 + annual_risk_free) ** (1.0 / yahoo_periods_per_year) - 1.0
+    )
+    try:
+        raw_frame, auto_current_predictors = build_yahoo_exposure_data(
+            downloaded_returns,
+            risk_free_return=per_period_risk_free,
+        )
+    except ValueError as error:
+        st.error(str(error))
+        st.stop()
+    st.caption(
+        "Automatic point-in-time predictors for each ticker: previous-period return, "
+        "previous three-period mean return, and previous three-period volatility. "
+        f"The constant per-period risk-free return is {per_period_risk_free:.4%}."
+    )
+elif source == "Synthetic demonstration":
     raw_frame = demo_exposure_data()
     st.warning(
         "A, B and C are fictional assets. Demo results verify the workflow; "
@@ -117,8 +232,8 @@ available_assets = [
 selected_assets = st.multiselect(
     "Risky assets",
     available_assets,
-    default=available_assets[:1],
-    key="diff_ols_assets",
+    default=(available_assets if source == "Yahoo Finance" else available_assets[:1]),
+    key=f"diff_ols_assets_{source}_{'|'.join(available_assets)}",
     help="Choose one asset for the exact scalar formula above; choose several for its covariance-aware extension.",
 )
 if not selected_assets:
@@ -132,6 +247,17 @@ try:
 except ValueError as error:
     st.error(str(error))
     st.stop()
+
+if source == "Yahoo Finance":
+    predictor_columns = [
+        column
+        for asset in selected_assets
+        for column in (
+            f"x_{asset}_lag1",
+            f"x_{asset}_mean3",
+            f"x_{asset}_vol3",
+        )
+    ]
 
 d1, d2, d3, d4 = st.columns(4)
 d1.metric("Observations", len(frame))
@@ -200,14 +326,25 @@ with s4:
 
 s5, s6, s7 = st.columns(3)
 with s5:
-    periods_per_year = st.number_input(
-        "Periods per year",
-        min_value=1,
-        max_value=365,
-        value=12,
-        step=1,
-        key="diff_ols_ppy",
-    )
+    if yahoo_periods_per_year is not None:
+        periods_per_year = st.number_input(
+            "Periods per year",
+            min_value=1,
+            max_value=365,
+            value=int(yahoo_periods_per_year),
+            step=1,
+            disabled=True,
+            key="diff_ols_ppy_yahoo",
+        )
+    else:
+        periods_per_year = st.number_input(
+            "Periods per year",
+            min_value=1,
+            max_value=365,
+            value=12,
+            step=1,
+            key="diff_ols_ppy_manual",
+        )
 with s6:
     response_scale = st.number_input(
         "Diffusion response scale",
@@ -266,26 +403,33 @@ else:
 
 st.markdown("**Predictors available now for the next holding period**")
 st.caption(
-    "Defaults show the final historical row only for convenience. Replace them "
-    "with the values actually observable at the decision time."
+    "Yahoo values are calculated automatically from the latest completed return periods. "
+    "For uploaded data, replace the defaults with values observable at the decision time."
 )
+data_fingerprint = int(pd.util.hash_pandas_object(frame, index=True).sum())
 predictor_values = []
 predictor_inputs = st.columns(min(4, len(predictor_columns)))
 for index, column in enumerate(predictor_columns):
     with predictor_inputs[index % len(predictor_inputs)]:
+        default_predictor = (
+            float(auto_current_predictors[column])
+            if auto_current_predictors is not None
+            else float(frame[column].iloc[-1])
+        )
         predictor_values.append(
             st.number_input(
                 column,
-                value=float(frame[column].iloc[-1]),
+                value=default_predictor,
                 format="%.6f",
-                key=f"diff_ols_current_{column}",
+                disabled=source == "Yahoo Finance",
+                key=f"diff_ols_current_{source}_{column}_{data_fingerprint}",
             )
         )
 
 current_signature = (
     tuple(return_columns),
     tuple(predictor_columns),
-    int(pd.util.hash_pandas_object(frame, index=True).sum()),
+    data_fingerprint,
     int(window),
     float(fixed_b),
     b_grid,

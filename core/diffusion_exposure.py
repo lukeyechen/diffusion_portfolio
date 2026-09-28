@@ -24,6 +24,54 @@ METHODS = (
 )
 
 
+def build_yahoo_exposure_data(
+    returns: pd.DataFrame,
+    *,
+    risk_free_return: float = 0.0,
+) -> tuple[pd.DataFrame, pd.Series]:
+    """Build point-in-time regression rows from downloaded asset returns.
+
+    For the return realized at date ``t``, every feature uses returns dated no
+    later than ``t-1``.  The returned current vector uses the latest completed
+    returns and is therefore aligned to the next, not-yet-realized period.
+    """
+    if not isinstance(returns, pd.DataFrame) or returns.empty:
+        raise ValueError("Yahoo returns must be a non-empty DataFrame.")
+    if len(returns) < 5 or returns.shape[1] < 1:
+        raise ValueError("Need at least five downloaded return observations.")
+    if returns.index.has_duplicates or not returns.index.is_monotonic_increasing:
+        raise ValueError("Yahoo return dates must be unique and increasing.")
+    clean = returns.copy()
+    clean.columns = [str(column).strip().upper() for column in clean.columns]
+    clean = clean.apply(pd.to_numeric, errors="coerce")
+    values = clean.to_numpy(dtype=float)
+    if not np.isfinite(values).all() or (values <= -1.0).any():
+        raise ValueError("Downloaded returns must be finite and greater than -100%.")
+    if not np.isfinite(risk_free_return) or risk_free_return <= -1.0:
+        raise ValueError("The per-period risk-free return must be finite and greater than -100%.")
+
+    past = clean.shift(1)
+    predictors: dict[str, pd.Series] = {}
+    current: dict[str, float] = {}
+    for asset in clean.columns:
+        predictors[f"x_{asset}_lag1"] = past[asset]
+        predictors[f"x_{asset}_mean3"] = past[asset].rolling(3).mean()
+        predictors[f"x_{asset}_vol3"] = past[asset].rolling(3).std(ddof=0)
+        current[f"x_{asset}_lag1"] = float(clean[asset].iloc[-1])
+        current[f"x_{asset}_mean3"] = float(clean[asset].iloc[-3:].mean())
+        current[f"x_{asset}_vol3"] = float(clean[asset].iloc[-3:].std(ddof=0))
+
+    frame = pd.DataFrame(index=clean.index)
+    frame["date"] = pd.to_datetime(clean.index)
+    frame["rf"] = float(risk_free_return)
+    for asset in clean.columns:
+        frame[f"ret_{asset}"] = clean[asset]
+    for column, series in predictors.items():
+        frame[column] = series
+    frame = frame.dropna().reset_index(drop=True)
+    return frame, pd.Series(current, dtype=float)
+
+
 def prepare_exposure_data(
     source: Any,
     assets: Iterable[str] | None = None,
