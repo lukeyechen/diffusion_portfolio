@@ -417,7 +417,7 @@ if source != "Yahoo Finance":
     st.info("Download Yahoo Finance data to compare both holding periods. An uploaded CSV supplies only one holding period.")
 else:
     comparison_signature = (
-        tuple(tickers), start_date, oos_start, int(lookback), holding_period,
+        tuple(tickers), start_date, oos_start, int(lookback), int(cfg["periods_per_year"]),
         float(gamma), int(m), float(beta), int(n_steps), float(max_long_weight),
     )
     if st.button("Compare 1W and 2W methods", key="bt_up_compare_horizons"):
@@ -431,7 +431,7 @@ else:
                     period_returns = period_returns.replace([np.inf, -np.inf], np.nan).dropna()
                     # Keep the estimation window approximately the same length in years.
                     period_lookback = round(
-                        int(lookback) * period_cfg["periods_per_year"] / ppy
+                        int(lookback) * period_cfg["periods_per_year"] / int(cfg["periods_per_year"])
                     )
                     min_train = (
                         int(period_cfg["min_train_size"])
