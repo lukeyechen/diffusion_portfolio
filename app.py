@@ -11,11 +11,11 @@ st.set_page_config(
 SECTIONS = [
     "Portfolio",
     "Diffusion OLS",
-    "Method Comparison",
     "Backtest",
     "Diffusion Diagnostics",
-    "Portfolio (Legacy)",
-    "Method Comparison (Legacy)",
+    "Method Comparison",
+    #"Portfolio (Legacy)",
+    #"Method Comparison (Legacy)",
 ]
 
 if "app_section" not in st.session_state:
