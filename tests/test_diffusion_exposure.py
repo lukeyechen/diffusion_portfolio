@@ -145,6 +145,36 @@ def test_backtest_is_chronological_and_accounts_for_costs_and_cash():
     )
 
 
+def test_backtest_start_date_limits_evaluation_but_preserves_training_history():
+    frame = demo_exposure_data(90)
+    selected_start = frame["date"].iloc[75]
+    results, forecasts = backtest_exposure(
+        frame,
+        ["ret_A"],
+        ["x_1", "x_2"],
+        window=65,
+        oos_start=selected_start,
+    )
+
+    assert results["date"].min() == selected_start
+    assert forecasts["date"].min() == selected_start
+    assert results["date"].nunique() == len(frame) - 75
+    first_buy_and_hold = results.loc[
+        results["method"] == "Buy and hold"
+    ].iloc[0]
+    assert first_buy_and_hold["weight_A"] == pytest.approx(1.0)
+    assert first_buy_and_hold["turnover"] == pytest.approx(1.0)
+
+    with pytest.raises(ValueError, match="after the final"):
+        backtest_exposure(
+            frame,
+            ["ret_A"],
+            ["x_1", "x_2"],
+            window=65,
+            oos_start="2100-01-01",
+        )
+
+
 def test_latest_exposure_and_summary_have_expected_outputs():
     frame, return_columns, predictor_columns = prepare_exposure_data(
         demo_exposure_data(90), ["A"]
