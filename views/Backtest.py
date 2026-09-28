@@ -406,6 +406,91 @@ with st.expander("Selected T frequency"):
         hide_index=True,
     )
 
+st.markdown("**1-week and 2-week method comparison**")
+st.caption(
+    "Compare the four methods in the example using these tickers, the same evaluation start, "
+    "and a 25 bps realized trading cost. Gross and net are annualized growth rates (CAGR); "
+    "turnover is the average fraction traded per holding period. The 50% step moves halfway "
+    "toward the turnover-controlled target at each rebalance."
+)
+if source != "Yahoo Finance":
+    st.info("Download Yahoo Finance data to compare both holding periods. An uploaded CSV supplies only one holding period.")
+else:
+    comparison_signature = (
+        tuple(tickers), start_date, oos_start, int(lookback), int(cfg["periods_per_year"]),
+        float(gamma), int(m), float(beta), int(n_steps), float(max_long_weight),
+    )
+    if st.button("Compare 1W and 2W methods", key="bt_up_compare_horizons"):
+        comparison_rows = []
+        comparison_dates = []
+        try:
+            with st.spinner("Running both holding periods and rebalance settings..."):
+                for label, period in (("1W", "1 week"), ("2W", "2 weeks")):
+                    period_cfg = get_horizon_preset(period)
+                    period_returns = _download_holding_returns(tuple(tickers), start_date, period)
+                    period_returns = period_returns.replace([np.inf, -np.inf], np.nan).dropna()
+                    # Keep the estimation window approximately the same length in years.
+                    period_lookback = round(
+                        int(lookback) * period_cfg["periods_per_year"] / int(cfg["periods_per_year"])
+                    )
+                    min_train = (
+                        int(period_cfg["min_train_size"])
+                        + int(period_cfg["inner_folds"]) * int(period_cfg["validation_size"])
+                    )
+                    period_cfg["lookback"] = max(min_train, period_lookback)
+                    if len(period_returns) <= period_cfg["lookback"]:
+                        raise ValueError(f"Not enough {period} observations for the comparison.")
+
+                    # Both calls use the same return history and model settings. Only
+                    # the turnover-controlled method depends on the rebalance step.
+                    full_summary, full_detail, _, _ = _cached_backtest(
+                        period_returns, period_cfg, gamma, m, beta, n_steps,
+                        0.0025, 1.0, max_long_weight, oos_start,
+                    )
+                    half_summary, _, _, _ = _cached_backtest(
+                        period_returns, period_cfg, gamma, m, beta, n_steps,
+                        0.0025, 0.5, max_long_weight, oos_start,
+                    )
+                    comparison_dates.append(
+                        f"{label}: {pd.Timestamp(full_detail['Date'].iloc[0]).date()} "
+                        f"to {pd.Timestamp(full_detail['Date'].iloc[-1]).date()}"
+                    )
+                    for method_label, method, summary in (
+                        ("MV + LW", "Classical MV + LW", full_summary),
+                        ("Exact Diffusion", "Exact Diffusion (Best-T)", full_summary),
+                        ("Exact Diffusion + TC25", "Turnover-Controlled Exact Diffusion", full_summary),
+                        ("Exact Diffusion + TC25 + 50% step", "Turnover-Controlled Exact Diffusion", half_summary),
+                    ):
+                        result = summary.loc[summary["Method"] == method].iloc[0]
+                        comparison_rows.append({
+                            "Holding": label,
+                            "Method": method_label,
+                            "Gross": result["CAGR"],
+                            "Net, 25bp": result["Net CAGR 25bps"],
+                            "Turnover": result["Average turnover"],
+                            "Sharpe": result["Net Sharpe 25bps"],
+                        })
+        except (ValueError, RuntimeError) as exc:
+            st.error(f"Could not complete the horizon comparison: {exc}")
+        else:
+            st.session_state["bt_up_horizon_comparison"] = {
+                "signature": comparison_signature,
+                "rows": comparison_rows,
+                "dates": comparison_dates,
+            }
+
+    comparison = st.session_state.get("bt_up_horizon_comparison")
+    if comparison and comparison["signature"] == comparison_signature:
+        st.dataframe(
+            pd.DataFrame(comparison["rows"]).style.format({
+                "Gross": "{:.2%}", "Net, 25bp": "{:.2%}",
+                "Turnover": "{:.2%}", "Sharpe": "{:.3f}",
+            }),
+            use_container_width=True,
+            hide_index=True,
+        )
+        st.caption("Out-of-sample dates: " + "; ".join(comparison["dates"]))
+
 wealth_index = pd.to_datetime(detail["Date"])
 wealth = pd.DataFrame(index=wealth_index)
 wealth["Selected strategy — gross"] = capital * np.cumprod(1.0 + gross)
