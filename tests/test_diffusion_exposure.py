@@ -5,12 +5,47 @@ import pytest
 from core.diffusion_exposure import (
     allocate_exposure,
     backtest_exposure,
+    build_yahoo_exposure_data,
     demo_exposure_data,
     fit_diffusion_forecast,
     latest_exposure,
     prepare_exposure_data,
     summarize_exposure,
 )
+
+
+def test_yahoo_features_are_past_only_and_current_values_target_next_period():
+    index = pd.date_range("2025-01-03", periods=7, freq="W-FRI")
+    returns = pd.DataFrame(
+        {
+            "aapl": [0.01, 0.02, -0.01, 0.03, 0.04, -0.02, 0.05],
+            "msft": [-0.01, 0.01, 0.02, 0.00, 0.03, 0.01, -0.02],
+        },
+        index=index,
+    )
+    frame, current = build_yahoo_exposure_data(
+        returns, risk_free_return=0.001
+    )
+
+    assert frame["date"].iloc[0] == index[3]
+    assert frame["ret_AAPL"].iloc[0] == pytest.approx(returns["aapl"].iloc[3])
+    assert frame["x_AAPL_lag1"].iloc[0] == pytest.approx(
+        returns["aapl"].iloc[2]
+    )
+    assert frame["x_AAPL_mean3"].iloc[0] == pytest.approx(
+        returns["aapl"].iloc[:3].mean()
+    )
+    assert frame["x_AAPL_vol3"].iloc[0] == pytest.approx(
+        returns["aapl"].iloc[:3].std(ddof=0)
+    )
+    assert current["x_AAPL_lag1"] == pytest.approx(returns["aapl"].iloc[-1])
+    assert current["x_AAPL_mean3"] == pytest.approx(
+        returns["aapl"].iloc[-3:].mean()
+    )
+    assert current["x_AAPL_vol3"] == pytest.approx(
+        returns["aapl"].iloc[-3:].std(ddof=0)
+    )
+    np.testing.assert_allclose(frame["rf"], 0.001)
 
 
 def test_b_zero_recovers_ols_and_exact_terminal_moments():
