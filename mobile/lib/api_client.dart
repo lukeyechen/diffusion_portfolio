@@ -27,6 +27,10 @@ class PortfolioApiClient {
   Future<Map<String, dynamic>> backtest(Map<String, dynamic> request) =>
       _post('/v1/backtest', request);
 
+  Future<Map<String, dynamic>> diffusionOlsExposure(
+    Map<String, dynamic> request,
+  ) => _post('/v1/diffusion-ols/exposure', request);
+
   Future<Map<String, dynamic>> _post(
     String path,
     Map<String, dynamic> request,

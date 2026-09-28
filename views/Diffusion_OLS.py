@@ -11,6 +11,7 @@ from core.data import download_yahoo_returns
 from core.diffusion_exposure import (
     backtest_exposure,
     build_yahoo_exposure_data,
+    completed_yahoo_returns,
     demo_exposure_data,
     latest_exposure,
     prepare_exposure_data,
@@ -33,6 +34,7 @@ def _download_holding_returns(tickers, start, holding_period):
         end=None,
         interval=interval,
     )
+    base = completed_yahoo_returns(base, source=str(cfg["source"]))
     return aggregate_nonoverlapping(base, int(cfg["block_size"]))
 
 

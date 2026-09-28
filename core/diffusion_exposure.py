@@ -24,6 +24,39 @@ METHODS = (
 )
 
 
+def completed_yahoo_returns(
+    returns: pd.DataFrame, *, source: str, now: pd.Timestamp | None = None
+) -> pd.DataFrame:
+    """Exclude a live, incomplete Yahoo week/month before building predictors.
+
+    Yahoo's Friday resampling labels a partial Monday–Thursday week with the
+    upcoming Friday; monthly prices can similarly include the current month.
+    """
+    current = now if now is not None else pd.Timestamp.now(tz="America/New_York")
+    current = pd.Timestamp(current)
+    if current.tzinfo is None:
+        current = current.tz_localize("America/New_York")
+    else:
+        current = current.tz_convert("America/New_York")
+    dates = pd.DatetimeIndex(returns.index)
+    if dates.tz is not None:
+        dates = dates.tz_convert("America/New_York").tz_localize(None)
+    if source == "weekly":
+        days_since_friday = (current.weekday() - 4) % 7
+        last_friday = current.normalize() - pd.Timedelta(days=days_since_friday)
+        if days_since_friday == 0 and current.hour < 16:
+            last_friday -= pd.Timedelta(days=7)
+        valid = dates.normalize() <= last_friday.tz_localize(None)
+    elif source == "monthly":
+        valid = dates.to_period("M") < current.tz_localize(None).to_period("M")
+    else:
+        raise ValueError("Yahoo source must be weekly or monthly.")
+    filtered = returns.iloc[np.flatnonzero(valid)]
+    if filtered.empty:
+        raise ValueError("No completed Yahoo holding periods are available.")
+    return filtered
+
+
 def build_yahoo_exposure_data(
     returns: pd.DataFrame,
     *,

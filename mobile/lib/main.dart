@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'api_client.dart';
+import 'diffusion_ols_page.dart';
 import 'google_auth_controller.dart';
 import 'google_sign_in_button.dart';
 
@@ -115,6 +116,10 @@ class _PortfolioHomePageState extends State<PortfolioHomePage> {
                     apiUrl: () => _apiUrlController.text,
                     identityToken: () => _auth.idToken ?? '',
                   ),
+                  DiffusionOlsPage(
+                    apiUrl: () => _apiUrlController.text,
+                    identityToken: () => _auth.idToken ?? '',
+                  ),
                 ],
               ),
             ),
@@ -133,6 +138,10 @@ class _PortfolioHomePageState extends State<PortfolioHomePage> {
           NavigationDestination(
             icon: Icon(Icons.show_chart),
             label: 'Backtest',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.stacked_line_chart),
+            label: 'Diffusion OLS',
           ),
         ],
       ),

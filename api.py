@@ -15,6 +15,14 @@ from pydantic import BaseModel, Field, field_validator
 
 from config import DEFAULT_BETA, DEFAULT_GAMMA, DEFAULT_M, DEFAULT_MAX_LONG_WEIGHT
 from core.data import download_yahoo_returns
+from core.diffusion_exposure import (
+    backtest_exposure,
+    build_yahoo_exposure_data,
+    completed_yahoo_returns,
+    latest_exposure,
+    prepare_exposure_data,
+    summarize_exposure,
+)
 from core.metrics import (
     certainty_equivalent,
     portfolio_mean,
@@ -176,6 +184,130 @@ class BacktestRequest(PortfolioSettings):
     oos_start: date = date(2019, 1, 1)
     transaction_cost_bps: float = Field(default=25.0, ge=0.0, le=1_000.0)
     initial_capital: float = Field(default=10_000.0, gt=0.0)
+
+
+class DiffusionExposureRequest(BaseModel):
+    tickers: list[str] = Field(min_length=1, max_length=10)
+    start_date: date = date(2000, 1, 1)
+    holding_period: HoldingPeriod = "1 week"
+    annual_risk_free_percent: float = Field(default=4.0, gt=-100.0, le=100.0)
+    window: int = Field(default=120, ge=7, le=2000)
+    gamma: float = Field(default=5.0, gt=0.0, le=100.0)
+    cap: float = Field(default=0.4, gt=0.0, le=1.0)
+    cost_bps: float = Field(default=10.0, ge=0.0, le=500.0)
+    response_scale: float = Field(default=1.0, gt=0.0)
+    tuning_mode: Literal["Fixed b", "Past-only validation"] = "Fixed b"
+    fixed_b: float = Field(default=1.0, ge=0.0)
+    b_grid: list[float] = Field(default_factory=lambda: [0, 0.25, 1, 4, 16])
+    validation: int = Field(default=24, ge=1)
+    oos_start: date = date(2019, 1, 1)
+
+    @field_validator("tickers")
+    @classmethod
+    def normalize_exposure_tickers(cls, values: list[str]) -> list[str]:
+        normalized = list(dict.fromkeys(str(value).strip().upper() for value in values))
+        if not normalized or any(not value for value in normalized):
+            raise ValueError("Enter at least one valid ticker.")
+        return normalized
+
+
+@app.post("/v1/diffusion-ols/exposure")
+def diffusion_ols_exposure(
+    request: DiffusionExposureRequest,
+    _user: dict[str, Any] = Depends(require_google_user),
+) -> dict[str, Any]:
+    """Use the same Yahoo preparation and exposure engine as the Streamlit tab."""
+    try:
+        preset = get_horizon_preset(request.holding_period)
+        ppy = int(preset["periods_per_year"])
+        interval = "1wk" if preset["source"] == "weekly" else "1mo"
+        downloaded = download_yahoo_returns(
+            request.tickers,
+            start=request.start_date.isoformat(),
+            end=None,
+            interval=interval,
+        )
+        downloaded = completed_yahoo_returns(downloaded, source=str(preset["source"]))
+        holding_returns = aggregate_nonoverlapping(
+            downloaded, int(preset["block_size"])
+        )
+        risk_free = (1 + request.annual_risk_free_percent / 100) ** (1 / ppy) - 1
+        raw_frame, current = build_yahoo_exposure_data(
+            holding_returns, risk_free_return=risk_free
+        )
+        frame, return_columns, _ = prepare_exposure_data(raw_frame, request.tickers)
+        predictor_columns = [
+            column
+            for asset in request.tickers
+            for column in (f"x_{asset}_lag1", f"x_{asset}_mean3", f"x_{asset}_vol3")
+        ]
+        if request.window <= len(predictor_columns) + 2 or len(frame) <= request.window:
+            raise ValueError("The estimation window needs more observations and predictors.")
+        if request.tuning_mode == "Fixed b":
+            if request.fixed_b >= request.window:
+                raise ValueError("Fixed b must be smaller than the window.")
+            grid = None
+        else:
+            smallest_inner = request.window - request.validation
+            if smallest_inner <= len(predictor_columns) + 2:
+                raise ValueError("Reduce inner validation periods or increase the window.")
+            if not request.b_grid or any(
+                not np.isfinite(b) or b < 0 or b >= smallest_inner
+                for b in request.b_grid
+            ):
+                raise ValueError(f"Each candidate b must satisfy 0 <= b < {smallest_inner}.")
+            grid = request.b_grid
+
+        recommendation = latest_exposure(
+            frame, return_columns, predictor_columns,
+            current[predictor_columns].to_numpy(dtype=float),
+            window=request.window, b=request.fixed_b, b_grid=grid,
+            validation=request.validation, response_scale=request.response_scale,
+            gamma=request.gamma, cap=request.cap,
+        )
+        results, forecasts = backtest_exposure(
+            frame, return_columns, predictor_columns,
+            window=request.window, b=request.fixed_b, b_grid=grid,
+            validation=request.validation, response_scale=request.response_scale,
+            gamma=request.gamma, cap=request.cap, cost_bps=request.cost_bps,
+            oos_start=request.oos_start.isoformat(),
+        )
+        summary = summarize_exposure(
+            results, forecasts, periods_per_year=ppy, gamma=request.gamma
+        )
+        weights = recommendation["weights"]["Diffusion OLS"]
+        predicted = recommendation["forecasts"]["Diffusion OLS"]
+        variance = np.diag(recommendation["covariance"])
+        return {
+            "data": {
+                "assets": request.tickers,
+                "observations": len(frame),
+                "predictors": len(predictor_columns),
+                "periods_per_year": ppy,
+                "data_through": pd.Timestamp(frame["date"].iloc[-1]).date().isoformat(),
+                "evaluation_start": pd.Timestamp(results["date"].min()).date().isoformat(),
+                "evaluation_end": pd.Timestamp(results["date"].max()).date().isoformat(),
+            },
+            "recommendation": {
+                "selected_b": float(recommendation["selected_b"]),
+                "a": float(recommendation["a"]),
+                "cash_weight": max(0.0, 1.0 - float(np.sum(weights))),
+                "assets": [
+                    {
+                        "asset": asset,
+                        "forecast_excess_return": float(predicted[i]),
+                        "estimated_variance": float(variance[i]),
+                        "risky_weight": float(weights[i]),
+                    }
+                    for i, asset in enumerate(request.tickers)
+                ],
+            },
+            "summary": _records(summary),
+            "rolling_results": _records(results),
+            "rolling_forecasts": _records(forecasts),
+        }
+    except (ValueError, np.linalg.LinAlgError, RuntimeError) as exc:
+        raise _request_error(exc) from exc
 
 
 def _finite_or_none(value: Any) -> Any:

@@ -6,12 +6,31 @@ from core.diffusion_exposure import (
     allocate_exposure,
     backtest_exposure,
     build_yahoo_exposure_data,
+    completed_yahoo_returns,
     demo_exposure_data,
     fit_diffusion_forecast,
     latest_exposure,
     prepare_exposure_data,
     summarize_exposure,
 )
+
+
+def test_incomplete_yahoo_weeks_and_months_are_excluded():
+    now = pd.Timestamp("2026-09-28 15:00", tz="America/New_York")
+    weeks = pd.DataFrame(
+        {"AAPL": [0.01, 0.02]},
+        index=pd.to_datetime(["2026-09-25", "2026-10-02"]),
+    )
+    assert list(completed_yahoo_returns(weeks, source="weekly", now=now).index) == [
+        pd.Timestamp("2026-09-25")
+    ]
+    months = pd.DataFrame(
+        {"AAPL": [0.01, 0.02]},
+        index=pd.to_datetime(["2026-08-01", "2026-09-01"]),
+    )
+    assert list(completed_yahoo_returns(months, source="monthly", now=now).index) == [
+        pd.Timestamp("2026-08-01")
+    ]
 
 
 def test_yahoo_features_are_past_only_and_current_values_target_next_period():
