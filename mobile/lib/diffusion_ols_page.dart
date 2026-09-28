@@ -28,7 +28,7 @@ class _DiffusionOlsPageState extends State<DiffusionOlsPage> {
   final _cost = TextEditingController(text: '10.0');
   final _responseScale = TextEditingController(text: '1.0');
   final _fixedB = TextEditingController(text: '1.0');
-  final _grid = TextEditingController(text: '0, 0.25, 1, 4, 16');
+  final _grid = TextEditingController(text: '50, 60, 70, 89, 90, 91, 92, 93, 94, 95');
   final _validation = TextEditingController(text: '24');
   final _oosStart = TextEditingController(text: '2019-01-01');
   String _period = '1 week';
