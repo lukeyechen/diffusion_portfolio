@@ -302,8 +302,14 @@ def backtest_exposure(
     gamma: float = 5.0,
     cap: float = 1.0,
     cost_bps: float = 10.0,
+    oos_start: str | pd.Timestamp | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Run a chronological stock/cash backtest with identical risk estimates."""
+    """Run a chronological stock/cash backtest with identical risk estimates.
+
+    Rows before ``oos_start`` remain available to the rolling estimation
+    window, but no portfolio returns or turnover are recorded before that date.
+    All evaluated strategies begin the selected test interval in cash.
+    """
     _validate_backtest_settings(frame, predictor_columns, window, gamma, cap, cost_bps)
     x = frame[predictor_columns].to_numpy(dtype=float)
     risky_returns = frame[return_columns].to_numpy(dtype=float)
@@ -312,6 +318,16 @@ def backtest_exposure(
     asset_count = len(return_columns)
     candidate_values = None if b_grid is None else tuple(float(value) for value in b_grid)
 
+    first_origin = int(window)
+    if oos_start is not None:
+        start = pd.Timestamp(oos_start)
+        eligible = np.flatnonzero((frame["date"] >= start).to_numpy())
+        if len(eligible) == 0:
+            raise ValueError("Backtest start date must not be after the final data date.")
+        first_origin = max(first_origin, int(eligible[0]))
+    if first_origin >= len(frame):
+        raise ValueError("Backtest start leaves no out-of-sample periods.")
+
     holdings = {
         method: np.r_[np.zeros(asset_count), 1.0]
         for method in METHODS
@@ -319,7 +335,7 @@ def backtest_exposure(
     records: list[dict[str, Any]] = []
     forecast_records: list[dict[str, Any]] = []
 
-    for origin in range(window, len(frame)):
+    for origin in range(first_origin, len(frame)):
         train_x = x[origin - window : origin]
         train_y = excess[origin - window : origin]
         selected_b = (
@@ -375,7 +391,7 @@ def backtest_exposure(
                 )
             elif method == "Cash":
                 risky_weights = np.zeros(asset_count)
-            elif origin == window:
+            elif origin == first_origin:
                 risky_weights = np.full(asset_count, min(1.0 / asset_count, cap))
             else:
                 risky_weights = pretrade[:asset_count].copy()

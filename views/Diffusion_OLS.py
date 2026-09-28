@@ -49,6 +49,7 @@ def _run_backtest(
     gamma,
     cap,
     cost_bps,
+    oos_start,
 ):
     return backtest_exposure(
         frame,
@@ -62,6 +63,7 @@ def _run_backtest(
         gamma=float(gamma),
         cap=float(cap),
         cost_bps=float(cost_bps),
+        oos_start=pd.Timestamp(oos_start),
     )
 
 
@@ -259,6 +261,8 @@ if source == "Yahoo Finance":
         )
     ]
 
+data_fingerprint = int(pd.util.hash_pandas_object(frame, index=True).sum())
+
 d1, d2, d3, d4 = st.columns(4)
 d1.metric("Observations", len(frame))
 d2.metric("Risky assets", len(return_columns))
@@ -401,12 +405,30 @@ else:
         st.error(f"Each candidate b must satisfy 0 ≤ b < {smallest_inner}.")
         st.stop()
 
+st.markdown("**Out-of-sample evaluation**")
+earliest_backtest_date = pd.Timestamp(frame["date"].iloc[int(window)])
+latest_backtest_date = pd.Timestamp(frame["date"].iloc[-1])
+preferred_backtest_date = pd.Timestamp("2019-01-01")
+default_backtest_date = min(
+    max(preferred_backtest_date, earliest_backtest_date), latest_backtest_date
+)
+backtest_start_date = st.date_input(
+    "Backtest start date",
+    value=default_backtest_date.date(),
+    min_value=earliest_backtest_date.date(),
+    max_value=latest_backtest_date.date(),
+    key=f"diff_ols_oos_start_{data_fingerprint}_{int(window)}",
+    help=(
+        "Performance begins on this date. Earlier observations remain available "
+        "only for the rolling estimation window."
+    ),
+)
+
 st.markdown("**Predictors available now for the next holding period**")
 st.caption(
     "Yahoo values are calculated automatically from the latest completed return periods. "
     "For uploaded data, replace the defaults with values observable at the decision time."
 )
-data_fingerprint = int(pd.util.hash_pandas_object(frame, index=True).sum())
 predictor_values = []
 predictor_inputs = st.columns(min(4, len(predictor_columns)))
 for index, column in enumerate(predictor_columns):
@@ -440,6 +462,7 @@ current_signature = (
     float(cost_bps),
     int(periods_per_year),
     tuple(float(value) for value in predictor_values),
+    str(backtest_start_date),
 )
 
 run = st.button(
@@ -478,6 +501,7 @@ if run:
                 float(gamma),
                 float(cap),
                 float(cost_bps),
+                str(backtest_start_date),
             )
         st.session_state["diff_ols_output"] = (
             recommendation,
@@ -505,6 +529,7 @@ recommendation, results, forecasts, saved_signature = st.session_state[
     saved_cap,
     _,
     saved_ppy,
+    _,
     _,
 ) = saved_signature
 if saved_signature != current_signature:
@@ -563,6 +588,11 @@ else:
 # 4. Out-of-sample evidence
 # -----------------------------------------------------------------------------
 st.subheader("4. Chronological out-of-sample test")
+st.caption(
+    f"Evaluation dates: {pd.Timestamp(results['date'].min()).date()} to "
+    f"{pd.Timestamp(results['date'].max()).date()}. Earlier data are used only "
+    "for rolling model estimation."
+)
 summary = summarize_exposure(
     results,
     forecasts,
