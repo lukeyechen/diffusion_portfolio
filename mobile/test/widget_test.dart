@@ -24,5 +24,11 @@ void main() {
     expect(find.text('Data history starts (YYYY-MM-DD)'), findsOneWidget);
     expect(find.text('Holding period'), findsOneWidget);
     expect(find.text('Estimation lookback observations'), findsOneWidget);
+
+    await tester.tap(find.text('Diffusion OLS'));
+    await tester.pumpAndSettle();
+    expect(find.text('Diffusion OLS: Market Exposure'), findsOneWidget);
+    expect(find.text('Run Diffusion OLS exposure analysis'), findsOneWidget);
+    expect(find.text('Backtest start date (YYYY-MM-DD)'), findsOneWidget);
   });
 }

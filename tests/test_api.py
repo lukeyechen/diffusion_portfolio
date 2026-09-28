@@ -31,6 +31,7 @@ def test_openapi_contract():
     assert "/v1/auth/me" in paths
     assert "/v1/portfolio/recommendation" in paths
     assert "/v1/backtest" in paths
+    assert "/v1/diffusion-ols/exposure" in paths
 
 
 def test_pwa_origin_has_cors_access():
@@ -164,3 +165,29 @@ def test_backtest_contract(monkeypatch):
     assert result["t_selection"]["latest"] == 0.10
     assert result["t_selection"]["most_frequent"] == 0.10
     assert sum(row["count"] for row in result["t_selection"]["frequency"]) == 3
+
+
+def test_diffusion_ols_api_uses_shared_exposure_engine(monkeypatch):
+    dates = pd.date_range("2020-01-03", periods=155, freq="W-FRI")
+    rng = np.random.default_rng(123)
+    returns = pd.DataFrame(
+        {"AAPL": rng.normal(0.002, 0.025, len(dates))}, index=dates
+    )
+    monkeypatch.setattr(api, "download_yahoo_returns", lambda *args, **kwargs: returns)
+    request = api.DiffusionExposureRequest(
+        tickers=["aapl"], holding_period="1 week", window=40,
+        oos_start=date(2022, 1, 1), fixed_b=1.0,
+    )
+    output = api.diffusion_ols_exposure(request)
+    assert output["data"]["assets"] == ["AAPL"]
+    assert output["data"]["evaluation_start"] >= "2022-01-01"
+    assert output["recommendation"]["selected_b"] == 1.0
+    assert sum(row["Periods"] for row in output["summary"]) == 5 * len(
+        {row["date"] for row in output["rolling_forecasts"]}
+    )
+    assert {row["Method"] for row in output["summary"]} == {
+        "Diffusion OLS", "OLS", "Historical mean", "Buy and hold", "Cash"
+    }
+    assert output["recommendation"]["cash_weight"] + sum(
+        row["risky_weight"] for row in output["recommendation"]["assets"]
+    ) == pytest.approx(1.0)
