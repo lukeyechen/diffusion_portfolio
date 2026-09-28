@@ -1,4 +1,5 @@
 import 'package:diffusion_portfolio_mobile/main.dart';
+import 'package:diffusion_portfolio_mobile/diffusion_ols_page.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -28,6 +29,16 @@ void main() {
     await tester.tap(find.text('Diffusion OLS'));
     await tester.pumpAndSettle();
     expect(find.text('Diffusion OLS: Market Exposure'), findsOneWidget);
+    final olsScroll = find.descendant(
+      of: find.byType(DiffusionOlsPage),
+      matching: find.byType(Scrollable),
+    ).first;
+    await tester.scrollUntilVisible(
+      find.text('Backtest start date (YYYY-MM-DD)'),
+      400,
+      scrollable: olsScroll,
+    );
+    await tester.pumpAndSettle();
     expect(find.text('Run Diffusion OLS exposure analysis'), findsOneWidget);
     expect(find.text('Backtest start date (YYYY-MM-DD)'), findsOneWidget);
   });
