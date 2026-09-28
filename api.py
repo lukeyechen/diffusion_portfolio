@@ -198,7 +198,9 @@ class DiffusionExposureRequest(BaseModel):
     response_scale: float = Field(default=1.0, gt=0.0)
     tuning_mode: Literal["Fixed b", "Past-only validation"] = "Fixed b"
     fixed_b: float = Field(default=1.0, ge=0.0)
-    b_grid: list[float] = Field(default_factory=lambda: [0, 0.25, 1, 4, 16])
+    b_grid: list[float] = Field(
+        default_factory=lambda: [50, 60, 70, 89, 90, 91, 92, 93, 94, 95]
+    )
     validation: int = Field(default=24, ge=1)
     oos_start: date = date(2019, 1, 1)
 

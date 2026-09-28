@@ -382,10 +382,12 @@ if tuning_mode == "Fixed b":
     )
 else:
     t1, t2 = st.columns([2, 1])
+    if st.session_state.get("diff_ols_grid") == "0, 0.25, 1, 4, 16":
+        st.session_state["diff_ols_grid"] = "50, 60, 70, 89, 90, 91, 92, 93, 94, 95"
     with t1:
         grid_text = st.text_input(
             "Candidate b values",
-            "0, 0.25, 1, 4, 16",
+            "50, 60, 70, 89, 90, 91, 92, 93, 94, 95",
             key="diff_ols_grid",
         )
     with t2:
