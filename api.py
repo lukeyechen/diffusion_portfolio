@@ -186,6 +186,10 @@ class BacktestRequest(PortfolioSettings):
     initial_capital: float = Field(default=10_000.0, gt=0.0)
 
 
+class BacktestComparisonRequest(PortfolioSettings):
+    oos_start: date = date(2019, 1, 1)
+
+
 class DiffusionExposureRequest(BaseModel):
     tickers: list[str] = Field(min_length=1, max_length=10)
     start_date: date = date(2000, 1, 1)
@@ -642,5 +646,75 @@ def portfolio_backtest(
             "t_selection": t_selection,
             "disclaimer": "Historical research simulation; past performance does not guarantee future results.",
         }
+    except ValueError as exc:
+        raise _request_error(exc) from exc
+
+
+@app.post("/v1/backtest/horizon-comparison")
+def backtest_horizon_comparison(
+    request: BacktestComparisonRequest,
+    _user: dict[str, Any] = Depends(require_google_user),
+) -> dict[str, Any]:
+    """Compare 1W/2W methods with a fixed 25 bps realized trading cost."""
+    try:
+        base_cfg = get_horizon_preset(request.holding_period)
+        base_lookback = (
+            int(request.lookback)
+            if request.lookback is not None
+            else int(base_cfg["lookback"])
+        )
+        rows: list[dict[str, Any]] = []
+        dates: list[dict[str, str]] = []
+        for label, period in (("1W", "1 week"), ("2W", "2 weeks")):
+            period_cfg = get_horizon_preset(period)
+            lookback = round(
+                base_lookback * int(period_cfg["periods_per_year"])
+                / int(base_cfg["periods_per_year"])
+            )
+            required_min = (
+                int(period_cfg["min_train_size"])
+                + int(period_cfg["inner_folds"]) * int(period_cfg["validation_size"])
+            )
+            period_request = request.model_copy(update={
+                "holding_period": period,
+                "lookback": max(required_min, lookback),
+            })
+            returns, cfg = _load_and_configure_returns(period_request)
+            summary, detail, _, _ = run_oos_comparison(
+                returns,
+                cfg,
+                gamma=float(request.gamma),
+                m=int(request.synthetic_equivalent_m),
+                beta=float(request.beta),
+                n_steps=int(request.reverse_steps),
+                candidate_t=CANDIDATE_T,
+                turnover_penalty=0.0025,
+                rebalance_alpha=1.0,
+                additional_rebalance_alpha=0.5,
+                max_long_weight=float(request.max_long_weight),
+                oos_start=request.oos_start.isoformat(),
+                costs=(0.0025,),
+            )
+            dates.append({
+                "holding": label,
+                "start": pd.Timestamp(detail["Date"].iloc[0]).date().isoformat(),
+                "end": pd.Timestamp(detail["Date"].iloc[-1]).date().isoformat(),
+            })
+            for name, method in (
+                ("MV + LW", "Classical MV + LW"),
+                ("Exact Diffusion", "Exact Diffusion (Best-T)"),
+                ("Exact Diffusion + TC25", "Turnover-Controlled Exact Diffusion"),
+                ("Exact Diffusion + TC25 + 50% step", "Turnover-Controlled Exact Diffusion (50% step)"),
+            ):
+                result = summary.loc[summary["Method"] == method].iloc[0]
+                rows.append({
+                    "holding": label,
+                    "method": name,
+                    "gross": _finite_or_none(result["CAGR"]),
+                    "net_25bp": _finite_or_none(result["Net CAGR 25bps"]),
+                    "turnover": _finite_or_none(result["Average turnover"]),
+                    "sharpe": _finite_or_none(result["Net Sharpe 25bps"]),
+                })
+        return {"rows": rows, "dates": dates}
     except ValueError as exc:
         raise _request_error(exc) from exc
