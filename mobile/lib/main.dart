@@ -353,6 +353,7 @@ class _RecommendationPageState extends State<RecommendationPage> {
     }
   }
 
+
   @override
   Widget build(BuildContext context) {
     return ListView(
@@ -546,8 +547,11 @@ class _BacktestPageState extends State<BacktestPage> {
   String _strategy = 'Turnover-Controlled Exact Diffusion';
   String _turnoverMode = 'Validated preset';
   bool _loading = false;
+  bool _comparisonLoading = false;
   String? _error;
+  String? _comparisonError;
   Map<String, dynamic>? _result;
+  Map<String, dynamic>? _comparison;
 
   @override
   void dispose() {
@@ -693,6 +697,57 @@ class _BacktestPageState extends State<BacktestPage> {
     }
   }
 
+  Future<void> _compareHorizons() async {
+    FocusScope.of(context).unfocus();
+    final tickers = _tickersController.text
+        .split(RegExp(r'[,\s]+'))
+        .map((value) => value.trim().toUpperCase())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList();
+    final lookback = int.tryParse(_lookbackController.text.trim());
+    final gamma = double.tryParse(_gammaController.text.trim());
+    final maxWeight = double.tryParse(_maxWeightController.text.trim());
+    final syntheticM = int.tryParse(_syntheticMController.text.trim());
+    final beta = double.tryParse(_betaController.text.trim());
+    final reverseSteps = int.tryParse(_reverseStepsController.text.trim());
+    if (tickers.isEmpty || lookback == null || gamma == null ||
+        maxWeight == null || syntheticM == null || beta == null ||
+        reverseSteps == null) {
+      setState(() => _comparisonError = 'Enter valid comparison settings.');
+      return;
+    }
+    setState(() {
+      _comparisonLoading = true;
+      _comparisonError = null;
+      _comparison = null;
+    });
+    try {
+      final result = await PortfolioApiClient(
+        baseUrl: widget.apiUrl(),
+        identityToken: widget.identityToken(),
+      ).backtestHorizonComparison({
+        'tickers': tickers,
+        'start_date': _startDateController.text.trim(),
+        'holding_period': _holdingPeriod,
+        'lookback': lookback,
+        'gamma': gamma,
+        'synthetic_equivalent_m': syntheticM,
+        'beta': beta,
+        'reverse_steps': reverseSteps,
+        'max_long_weight': maxWeight,
+        'oos_start': _oosStartController.text.trim(),
+      });
+      if (mounted) setState(() => _comparison = result);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _comparisonError = error.message);
+    } catch (error) {
+      if (mounted) setState(() => _comparisonError = 'Unexpected error: $error');
+    } finally {
+      if (mounted) setState(() => _comparisonLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListView(
@@ -835,7 +890,84 @@ class _BacktestPageState extends State<BacktestPage> {
           ),
         if (_error != null) _ErrorCard(message: _error!),
         if (_result != null) _BacktestResult(result: _result!),
+        const SizedBox(height: 16),
+        Text('1-week and 2-week method comparison',
+            style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 6),
+        const Text(
+          'Gross and net are annualized growth rates. Net uses 25 bps per unit of turnover; '
+          'turnover is averaged per holding period. The 50% step moves halfway to the target.',
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed: _loading || _comparisonLoading ? null : _compareHorizons,
+          icon: _comparisonLoading
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.compare_arrows),
+          label: Text(_comparisonLoading
+              ? 'Comparing methods…'
+              : 'Compare 1W and 2W methods'),
+        ),
+        if (_comparisonError != null)
+          _ErrorCard(message: _comparisonError!),
+        if (_comparison != null)
+          _HorizonComparisonTable(result: _comparison!),
       ],
+    );
+  }
+}
+
+class _HorizonComparisonTable extends StatelessWidget {
+  const _HorizonComparisonTable({required this.result});
+
+  final Map<String, dynamic> result;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = _listOfMaps(result['rows']);
+    final dates = _listOfMaps(result['dates']);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                columnSpacing: 16,
+                columns: const [
+                  DataColumn(label: Text('Holding')),
+                  DataColumn(label: Text('Method')),
+                  DataColumn(label: Text('Gross'), numeric: true),
+                  DataColumn(label: Text('Net, 25bp'), numeric: true),
+                  DataColumn(label: Text('Turnover'), numeric: true),
+                  DataColumn(label: Text('Sharpe'), numeric: true),
+                ],
+                rows: rows.map((row) => DataRow(cells: [
+                  DataCell(Text('${row['holding'] ?? '—'}')),
+                  DataCell(Text('${row['method'] ?? '—'}')),
+                  DataCell(Text(_percent(row['gross']))),
+                  DataCell(Text(_percent(row['net_25bp']))),
+                  DataCell(Text(_percent(row['turnover']))),
+                  DataCell(Text(_decimal(row['sharpe']))),
+                ])).toList(),
+              ),
+            ),
+            for (final period in dates)
+              Padding(
+                padding: const EdgeInsets.only(left: 8, bottom: 4),
+                child: Text(
+                  '${period['holding']}: ${period['start']} to ${period['end']}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
