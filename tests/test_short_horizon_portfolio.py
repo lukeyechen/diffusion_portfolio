@@ -1,11 +1,13 @@
 import numpy as np
 import pandas as pd
+import core.short_horizon_portfolio as shp
 
 from core.short_horizon_portfolio import (
     aggregate_nonoverlapping,
     drifted_weights,
     get_horizon_preset,
     project_long_only_capped,
+    run_oos_comparison,
 )
 
 
@@ -51,3 +53,31 @@ def test_capped_projection_respects_constraints():
 def test_capped_projection_rejects_infeasible_cap():
     with np.testing.assert_raises(ValueError):
         project_long_only_capped(np.array([0.5, 0.5]), 0.40)
+
+
+def test_additional_rebalance_path_matches_separate_half_step(monkeypatch):
+    monkeypatch.setattr(shp, "select_best_nested_t", lambda *args, **kwargs: (0.0, None))
+    dates = pd.date_range("2025-01-03", periods=12, freq="W-FRI")
+    rng = np.random.default_rng(17)
+    returns = pd.DataFrame(
+        rng.normal(0.003, 0.025, (12, 5)), index=dates,
+        columns=["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN"],
+    )
+    cfg = {"lookback": 6, "periods_per_year": 52}
+    _, combined, _, _ = run_oos_comparison(
+        returns, cfg, rebalance_alpha=1.0,
+        additional_rebalance_alpha=0.5, max_long_weight=0.4,
+        oos_start="2025-01-01",
+    )
+    _, separate, _, _ = run_oos_comparison(
+        returns, cfg, rebalance_alpha=0.5, max_long_weight=0.4,
+        oos_start="2025-01-01",
+    )
+    np.testing.assert_allclose(
+        combined["return__Turnover-Controlled Exact Diffusion (50% step)"],
+        separate["return__Turnover-Controlled Exact Diffusion"],
+    )
+    np.testing.assert_allclose(
+        combined["turnover__Turnover-Controlled Exact Diffusion (50% step)"],
+        separate["turnover__Turnover-Controlled Exact Diffusion"],
+    )
