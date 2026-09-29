@@ -31,6 +31,7 @@ def test_openapi_contract():
     assert "/v1/auth/me" in paths
     assert "/v1/portfolio/recommendation" in paths
     assert "/v1/backtest" in paths
+    assert "/v1/backtest/horizon-comparison" in paths
     assert "/v1/diffusion-ols/exposure" in paths
 
 
@@ -165,6 +166,40 @@ def test_backtest_contract(monkeypatch):
     assert result["t_selection"]["latest"] == 0.10
     assert result["t_selection"]["most_frequent"] == 0.10
     assert sum(row["count"] for row in result["t_selection"]["frequency"]) == 3
+
+
+def test_backtest_horizon_comparison_uses_both_steps_and_horizons(monkeypatch):
+    observed = []
+    frame = _returns()
+
+    def fake_load(settings):
+        return frame, {"periods_per_year": 52 if settings.holding_period == "1 week" else 26,
+                       "lookback": settings.lookback}
+
+    def fake_run(returns, cfg, **kwargs):
+        observed.append((cfg["periods_per_year"], cfg["lookback"],
+                         kwargs["rebalance_alpha"], kwargs["additional_rebalance_alpha"]))
+        methods = ["Classical MV + LW", "Exact Diffusion (Best-T)",
+                   "Turnover-Controlled Exact Diffusion",
+                   "Turnover-Controlled Exact Diffusion (50% step)"]
+        summary = pd.DataFrame([
+            {"Method": method, "CAGR": 0.4, "Net CAGR 25bps": 0.39,
+             "Average turnover": 0.02, "Net Sharpe 25bps": 1.3}
+            for method in methods
+        ])
+        detail = pd.DataFrame({"Date": frame.index[-2:]})
+        return summary, detail, None, None
+
+    monkeypatch.setattr(api, "_load_and_configure_returns", fake_load)
+    monkeypatch.setattr(api, "run_oos_comparison", fake_run)
+    result = api.backtest_horizon_comparison(api.BacktestComparisonRequest(
+        holding_period="1 week", lookback=520,
+    ))
+    assert observed == [(52, 520, 1.0, 0.5), (26, 260, 1.0, 0.5)]
+    assert len(result["rows"]) == 8
+    assert {row["holding"] for row in result["rows"]} == {"1W", "2W"}
+    assert result["rows"][0]["net_25bp"] == pytest.approx(0.39)
+    assert result["rows"][3]["method"].endswith("50% step")
 
 
 def test_diffusion_ols_api_uses_shared_exposure_engine(monkeypatch):
