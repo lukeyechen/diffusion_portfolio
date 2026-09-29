@@ -436,6 +436,7 @@ def run_oos_comparison(
     candidate_t: list[float] | None = None,
     turnover_penalty: float = 0.0025,
     rebalance_alpha: float = 1.0,
+    additional_rebalance_alpha: float | None = None,
     max_long_weight: float = 0.40,
     oos_start: str | pd.Timestamp = "2019-01-01",
     costs: tuple[float, ...] = (0.0010, 0.0025),
@@ -452,6 +453,7 @@ def run_oos_comparison(
         raise ValueError(f"Need more than {lookback} observations; got {len(returns)}.")
 
     method_tc = "Turnover-Controlled Exact Diffusion"
+    method_tc_additional = "Turnover-Controlled Exact Diffusion (50% step)"
     methods = [
         "Equal Weight",
         "Classical MV",
@@ -460,6 +462,8 @@ def run_oos_comparison(
         "50% Exact Diff + 50% EW",
         method_tc,
     ]
+    if additional_rebalance_alpha is not None:
+        methods.append(method_tc_additional)
     forecast_methods = {"OLS Forecast + Diffusion Risk": "ols", "Diffusion Forecast + Diffusion Risk": "diffusion"}
     if include_forecasts:
         methods.extend(forecast_methods)
@@ -537,6 +541,22 @@ def run_oos_comparison(
             "50% Exact Diff + 50% EW": w_blend,
             method_tc: w_tc,
         }
+        if additional_rebalance_alpha is not None:
+            prev_additional = prev_post[method_tc_additional]
+            if prev_additional is None:
+                prev_additional = ew.copy()
+            raw_additional = solve_mv_turnover_aware(
+                mu_d, sigma_d, previous_weights=prev_additional,
+                turnover_penalty=float(turnover_penalty), gamma=float(gamma),
+                mode="Long-only", max_long_weight=float(max_long_weight),
+            )
+            weights[method_tc_additional] = project_long_only_capped(
+                partial_rebalance(
+                    raw_additional, prev_additional,
+                    alpha=float(additional_rebalance_alpha),
+                ),
+                max_long_weight,
+            )
 
         row = {
             "Date": pd.Timestamp(returns.index[i]),
