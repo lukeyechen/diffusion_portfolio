@@ -51,6 +51,7 @@ def _cached_backtest(
     rebalance_alpha,
     max_long_weight,
     oos_start,
+    additional_rebalance_alpha=None,
 ):
     return run_oos_comparison(
         returns,
@@ -62,6 +63,7 @@ def _cached_backtest(
         candidate_t=CANDIDATE_T,
         turnover_penalty=float(turnover_penalty),
         rebalance_alpha=float(rebalance_alpha),
+        additional_rebalance_alpha=additional_rebalance_alpha,
         max_long_weight=float(max_long_weight),
         oos_start=oos_start,
         costs=(0.0010, 0.0025),
@@ -441,15 +443,10 @@ else:
                     if len(period_returns) <= period_cfg["lookback"]:
                         raise ValueError(f"Not enough {period} observations for the comparison.")
 
-                    # Both calls use the same return history and model settings. Only
-                    # the turnover-controlled method depends on the rebalance step.
+                    # One rolling pass evaluates both turnover-control variants.
                     full_summary, full_detail, _, _ = _cached_backtest(
                         period_returns, period_cfg, gamma, m, beta, n_steps,
-                        0.0025, 1.0, max_long_weight, oos_start,
-                    )
-                    half_summary, _, _, _ = _cached_backtest(
-                        period_returns, period_cfg, gamma, m, beta, n_steps,
-                        0.0025, 0.5, max_long_weight, oos_start,
+                        0.0025, 1.0, max_long_weight, oos_start, 0.5,
                     )
                     comparison_dates.append(
                         f"{label}: {pd.Timestamp(full_detail['Date'].iloc[0]).date()} "
@@ -459,7 +456,7 @@ else:
                         ("MV + LW", "Classical MV + LW", full_summary),
                         ("Exact Diffusion", "Exact Diffusion (Best-T)", full_summary),
                         ("Exact Diffusion + TC25", "Turnover-Controlled Exact Diffusion", full_summary),
-                        ("Exact Diffusion + TC25 + 50% step", "Turnover-Controlled Exact Diffusion", half_summary),
+                        ("Exact Diffusion + TC25 + 50% step", "Turnover-Controlled Exact Diffusion (50% step)", full_summary),
                     ):
                         result = summary.loc[summary["Method"] == method].iloc[0]
                         comparison_rows.append({
