@@ -1,10 +1,13 @@
 from streamlit.testing.v1 import AppTest
+from pathlib import Path
 import numpy as np
 import pandas as pd
 
+PAGE = Path(__file__).resolve().parents[1] / "views" / "Feasible_Tuning.py"
+
 
 def test_feasible_tuning_page_and_gaussian_example():
-    app = AppTest.from_file("views/Feasible_Tuning.py").run()
+    app = AppTest.from_file(PAGE).run()
     assert not app.exception
     app.radio[0].set_value("Gaussian theorem check").run()
     assert not app.exception
@@ -15,7 +18,7 @@ def test_feasible_tuning_page_and_gaussian_example():
 
 
 def test_historical_controls_and_results_without_live_download():
-    app = AppTest.from_file("views/Feasible_Tuning.py").run()
+    app = AppTest.from_file(PAGE).run()
     tickers = ("AAPL", "MSFT", "NVDA", "GOOGL", "AMZN")
     returns = pd.DataFrame(
         np.random.default_rng(42).normal(0.001, 0.02, (280, 5)),
