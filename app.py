@@ -11,6 +11,7 @@ st.set_page_config(
 SECTIONS = [
     "Portfolio",
     "Diffusion OLS",
+    "Feasible Tuning",
     "Backtest",
     "Diffusion Diagnostics",
     "Method Comparison",
@@ -40,6 +41,7 @@ if selected != st.session_state["app_section"]:
 VIEW_FILES = {
     "Portfolio": "Portfolio_Upgraded.py",
     "Diffusion OLS": "Diffusion_OLS.py",
+    "Feasible Tuning": "Feasible_Tuning.py",
     "Method Comparison": "Method_Comparison_Upgraded.py",
     "Backtest": "Backtest.py",
     "Diffusion Diagnostics": "Diffusion_Diagnostics.py",
