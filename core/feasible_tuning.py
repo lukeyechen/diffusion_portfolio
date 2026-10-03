@@ -19,6 +19,7 @@ from .predictive_means import MEAN_MODELS
 from .short_horizon_portfolio import performance_metrics
 
 OLD_METHOD = "Old Portfolio (Best-T + turnover control)"
+CLASSICAL_MV_RULE = "closed-form-unconstrained-v1"
 
 
 @dataclass(frozen=True)
@@ -151,7 +152,11 @@ def fit_portfolios(sample, settings, *, pilot=None, cap=None, trading=None, prev
         raw_portfolios[name] = w.copy()
         return w
 
-    portfolios = {"Classical (main sample)": weights(u, h, "Classical (main sample)")}
+    # Classical MV is the direct plug-in solution. Trading optimizers, caps and
+    # partial rebalancing apply only to the alternative strategies.
+    classical = np.linalg.solve(h, u) / settings.gamma
+    portfolios = {"Classical (main sample)": classical}
+    raw_portfolios["Classical (main sample)"] = classical.copy()
     diagnostics = []
     for name, b in choices.items():
         if methods is not None and name not in methods:
@@ -168,7 +173,9 @@ def fit_portfolios(sample, settings, *, pilot=None, cap=None, trading=None, prev
         })
     if pilot is not None:
         full_u, full_h = moments(np.concatenate([pilot, sample]))
-        portfolios["Classical (main + pilot)"] = weights(full_u, full_h, "Classical (main + pilot)")
+        full_classical = np.linalg.solve(full_h, full_u) / settings.gamma
+        portfolios["Classical (main + pilot)"] = full_classical
+        raw_portfolios["Classical (main + pilot)"] = full_classical.copy()
     if trading is not None and (methods is None or OLD_METHOD in methods):
         old = turnover_controlled_target(
             sample, previous.get(OLD_METHOD, np.full(len(u), 1/len(u))),
@@ -286,6 +293,8 @@ def historical_backtest(returns, settings, *, window=120, pilot_size=0,
             gross = float(rf + w @ (values[t] - rf))
             net = gross - cost_bps * 1e-4 * turnover
             if gross <= -1 or net <= -1:
+                if method == "Classical (main sample)":
+                    raise ValueError(f"Classical MV exhausts its capital on {dates[t].date()}. Its unconstrained weights cannot continue after a loss of 100% or more; increase risk aversion γ to reduce exposure.")
                 raise ValueError(f"{method} reaches a nonpositive wealth factor on {dates[t].date()}; reduce leverage or use the constrained comparison.")
             previous[method] = target * np.r_[1 + values[t], 1 + rf] / (1 + gross)
             row = {"Date": dates[t], "Method": method, "Gross return": gross,
