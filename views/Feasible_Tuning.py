@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import importlib
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from core.data import download_yahoo_returns, load_returns_csv
 from core.diffusion_exposure import completed_yahoo_returns
@@ -13,6 +15,7 @@ from core.diffusion_exposure import completed_yahoo_returns
 import core.feasible_tuning as _feasible_module
 if (not hasattr(_feasible_module, "trace_calibration")
         or not hasattr(_feasible_module, "epsilon_sensitivity")
+        or getattr(_feasible_module, "TRACE_CALIBRATION_VERSION", None) != 2
         or getattr(_feasible_module, "CLASSICAL_MV_RULE", None) != "allocation-aware-classical-v2"):
     importlib.reload(_feasible_module)
 from core.feasible_tuning import (OLD_METHOD, TradingComparison, TuningSettings, coefficients,
@@ -69,18 +72,18 @@ def _latest(returns, settings, history, window, rf, cap, trading):
 
 
 @st.cache_data(show_spinner=False)
-def _epsilon(returns, settings, candidates, window, start, evaluation_start, ppy, rf, cost, cap, trading):
+def _epsilon(returns, settings, candidates, window, start, evaluation_start, ppy, rf, cost, cap, trading, end_date):
     # Allocation-aware Classical MV v2.
     return epsilon_sensitivity(returns, settings, candidates, window=window,
                                calibration_start=start, evaluation_start=evaluation_start,
-                               periods_per_year=ppy, rf=rf, cost_bps=cost, cap=cap, trading=trading)
+                               periods_per_year=ppy, rf=rf, cost_bps=cost, cap=cap, trading=trading, end_date=end_date)
 
 
 @st.cache_data(show_spinner=False)
-def _trace_grid(returns, settings, epsilons, cs, window, start, evaluation_start, ppy, rf, cost, cap, trading):
+def _trace_grid(returns, settings, epsilons, cs, window, start, evaluation_start, ppy, rf, cost, cap, trading, end_date):
     return trace_calibration(returns, settings, epsilons, cs=cs, window=window,
                              calibration_start=start, evaluation_start=evaluation_start,
-                             periods_per_year=ppy, rf=rf, cost_bps=cost, cap=cap, trading=trading)
+                             periods_per_year=ppy, rf=rf, cost_bps=cost, cap=cap, trading=trading, end_date=end_date)
 
 
 def _label(name, practical):
@@ -286,20 +289,24 @@ if st.button("Run feasible-tuning backtest", type="primary"):
     except (ValueError, RuntimeError, np.linalg.LinAlgError) as exc:
         st.error(str(exc))
 
+history_default = str(pd.Timestamp(returns.index[0]).date()) if use_shared else start
+today_default = datetime.now(ZoneInfo("America/Havana")).date().isoformat()
+
 with st.expander("ε sensitivity: calibration and final evaluation"):
     st.caption("Candidates are compared on the earlier calibration period using net annualized mean–variance excess. The winner is frozen for the later evaluation. This experiment does not change the main backtest's ε. Choose the dates and candidate grid before examining final results; repeated tuning on the final period makes it exploratory.")
     candidates_text = _input(st, "text_input", "Positive ε candidates (maximum 12)", value="0.0001,0.001,0.01,0.05,0.25", key="epsilon_candidates")
-    calibration_start = _input(st, "text_input", "Calibration starts", value=oos_start, key="calibration_start")
+    calibration_start = _input(st, "text_input", "Calibration starts", value=history_default, key="calibration_start")
     eligible_dates = returns.index[window:]
     default_final = str(pd.Timestamp(eligible_dates[int(0.8*len(eligible_dates))]).date()) if len(eligible_dates) else oos_start
     evaluation_start = _input(st, "text_input", "Final evaluation starts", value=default_final, key="evaluation_start")
-    epsilon_signature = (signature, candidates_text, calibration_start, evaluation_start, ppy)
+    epsilon_end = _input(st, "text_input", "Calibration / evaluation end date", value=today_default, key="epsilon_end")
+    epsilon_signature = (signature, candidates_text, calibration_start, evaluation_start, ppy, epsilon_end)
     if st.button("Run ε calibration and final evaluation"):
         try:
             candidates = tuple(float(e.strip()) for e in candidates_text.split(",") if e.strip())
             with st.spinner("Calibrating ε on past data, then evaluating the frozen choice..."):
                 sensitivity = _epsilon(returns, settings, candidates, window, calibration_start,
-                                       evaluation_start, ppy, rf, cost, cap, trading)
+                                       evaluation_start, ppy, rf, cost, cap, trading, epsilon_end)
             st.session_state["feasible_epsilon_result"] = (epsilon_signature, sensitivity)
         except (ValueError, RuntimeError, np.linalg.LinAlgError) as exc:
             st.error(str(exc))
@@ -320,19 +327,20 @@ with st.expander("ε sensitivity: calibration and final evaluation"):
         st.line_chart(pd.DataFrame(wealth))
         st.caption(f"Final evaluation: {final['Date'].min().date()} to {final['Date'].max().date()}. Both strategies start from the same initial allocation at this boundary.")
 with st.expander("c calibration and joint c–ε calibration"):
-    st.caption("Select c alone with the main ε fixed, or search both jointly. Select by net annualized MV excess on past calibration data, then freeze both values for a later evaluation. Main backtest settings stay unchanged. Ties select the first pair in candidate order.")
+    st.caption("The end date defaults to today; only available completed return periods are used. Final evaluation starts is the earlier calibration/evaluation split. Select c alone with the main ε fixed, or search both jointly. Select by net annualized MV excess on past calibration data, then freeze both values for a later evaluation. Main backtest settings stay unchanged. Ties select the first pair in candidate order.")
     grid_mode = _input(st, "radio", "Trace calibration mode", options=["c only (fixed ε)", "Joint c and ε"], key="trace_grid_mode")
     cs_text = _input(st, "text_input", "c candidates (0 < c ≤ 4; maximum 12)", value="0.25,0.5,1,1.5,2,2.5,3,3.5,4", key="trace_cs")
     eps_text = _input(st, "text_input", "Joint ε candidates (maximum 12)", value="0.001,0.005,0.01,0.05,0.10,0.25", key="trace_eps", disabled=grid_mode.startswith("c only"))
-    grid_start = _input(st, "text_input", "c calibration starts", value=oos_start, key="trace_start")
+    grid_start = _input(st, "text_input", "c calibration starts", value=history_default, key="trace_start")
     grid_final = _input(st, "text_input", "c final evaluation starts", value=default_final, key="trace_final")
-    grid_signature = (signature, grid_mode, cs_text, eps_text, grid_start, grid_final, ppy)
+    grid_end = _input(st, "text_input", "c calibration / evaluation end date", value=today_default, key="trace_end")
+    grid_signature = (signature, grid_mode, cs_text, eps_text, grid_start, grid_final, ppy, grid_end)
     if st.button("Run c calibration and final evaluation"):
         try:
             cs = tuple(float(v.strip()) for v in cs_text.split(",") if v.strip())
             eps = (settings.epsilon,) if grid_mode.startswith("c only") else tuple(float(v.strip()) for v in eps_text.split(",") if v.strip())
             with st.spinner("Calibrating trace settings on past data, then evaluating the frozen pair..."):
-                grid_result = _trace_grid(returns, settings, eps, cs, window, grid_start, grid_final, ppy, rf, cost, cap, trading)
+                grid_result = _trace_grid(returns, settings, eps, cs, window, grid_start, grid_final, ppy, rf, cost, cap, trading, grid_end)
             st.session_state["feasible_trace_grid_result"] = (grid_signature, grid_result)
         except (ValueError, RuntimeError, np.linalg.LinAlgError) as exc:
             st.error(str(exc))

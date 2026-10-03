@@ -18,6 +18,8 @@ from .portfolio_rules import compute_weights
 from .predictive_means import MEAN_MODELS
 from .short_horizon_portfolio import performance_metrics
 
+TRACE_CALIBRATION_VERSION = 2
+
 OLD_METHOD = "Old Portfolio (Best-T + turnover control)"
 CLASSICAL_MV_RULE = "allocation-aware-classical-v2"
 
@@ -336,7 +338,7 @@ def latest_portfolios(returns, settings, history, *, window, rf=0.0, cap=None, t
 
 def trace_calibration(returns, settings, epsilons, *, cs=None, window, calibration_start,
                         evaluation_start, periods_per_year, rf=0.0, cost_bps=0.0,
-                        cap=None, trading=None):
+                        cap=None, trading=None, end_date=None):
     """Choose c and epsilon on past calibration only, then freeze for a held-out replay.
 
     No old nested-T calculation is needed for this trace-versus-classical experiment.
@@ -348,6 +350,11 @@ def trace_calibration(returns, settings, epsilons, *, cs=None, window, calibrati
     c_grid = (settings.c,) if cs is None else tuple(dict.fromkeys(float(c) for c in cs))
     if not c_grid or len(c_grid) > 12 or not np.isfinite(c_grid).all() or min(c_grid) <= 0 or max(c_grid) > 4:
         raise ValueError("Enter 1–12 finite c candidates with 0 < c ≤ 4.")
+    if end_date is not None:
+        end = pd.Timestamp(end_date).normalize()
+        if end < pd.Timestamp(evaluation_start):
+            raise ValueError("End date must be on or after final evaluation starts.")
+        returns = returns.loc[returns.index < end + pd.Timedelta(days=1)]
     cutoff = pd.Timestamp(evaluation_start)
     if pd.Timestamp(calibration_start) >= cutoff:
         raise ValueError("Calibration must start before the final evaluation.")

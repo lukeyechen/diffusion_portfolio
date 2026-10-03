@@ -206,6 +206,9 @@ class FeasibleTuningTests(unittest.TestCase):
         self.assertEqual(result["selected_c"], other["selected_c"])
         self.assertEqual(result["selected_epsilon"], other["selected_epsilon"])
         self.assertEqual(len(result["calibration"]), 4)
+        truncated = trace_calibration(frame, self.settings, [.25], cs=[1],
+                                      end_date=str(frame.index[35].date()), **options)
+        self.assertEqual(truncated["evaluation"]["Date"].max(), frame.index[35])
         winner = result["calibration"].loc[result["calibration"]["Annualized MV excess"].idxmax()]
         self.assertEqual(result["selected_c"], winner["c"])
         self.assertEqual(result["selected_epsilon"], winner["ε"])
