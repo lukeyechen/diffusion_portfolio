@@ -22,7 +22,7 @@ TRACE_CALIBRATION_VERSION = 2
 
 OLD_METHOD = "Old Portfolio (Best-T + turnover control)"
 CLASSICAL_MV_RULE = "allocation-aware-classical-v2"
-COMPARISON_VERSION = 3
+COMPARISON_VERSION = 4
 
 
 @dataclass(frozen=True)
@@ -126,7 +126,6 @@ def fit_portfolios(sample, settings, *, pilot=None, cap=None, trading=None, prev
     if trading is not None:
         trading.validate(n, len(u))
     choices = {
-        "Fixed b": settings.fixed_b,
         "Trace tuning": settings.c / (settings.epsilon + float(np.trace(h))),
     }
     if pilot is not None:
@@ -177,7 +176,6 @@ def fit_portfolios(sample, settings, *, pilot=None, cap=None, trading=None, prev
         diagnostics.append({
             "Method": name, "b": b, "a": a,
             "Effective b = n a": n * a,
-            "a cap active": b / n > settings.a_max,
             "T": -float(np.log(a)) / (trading.beta if trading else 1.0),
             "Horizon rule": "Direct b rule",
         })
@@ -201,7 +199,7 @@ def fit_portfolios(sample, settings, *, pilot=None, cap=None, trading=None, prev
                 "Mean-Variance", old["mu"], old["sigma"], gamma=settings.gamma,
                 constraint_mode="Long-only", max_long_weight=trading.cap)
         diagnostics.append({"Method": OLD_METHOD, "b": np.nan, "a": np.nan,
-                            "Effective b = n a": np.nan, "a cap active": False,
+                            "Effective b = n a": np.nan,
                             "T": old["T"], "Horizon rule": "Nested candidate grid"})
     if return_raw:
         return portfolios, pd.DataFrame(diagnostics), raw_portfolios

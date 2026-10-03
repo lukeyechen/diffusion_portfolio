@@ -342,9 +342,11 @@ def test_trace_c_precision_and_latest_noise_labels():
     assert not app.exception and not app.error
     tuning = next(item.value for item in app.dataframe if "Trace c" in item.value.columns).set_index("Method")
     assert float(tuning.loc["Trace tuning", "Trace c"]) == .025
-    assert float(tuning.loc["Fixed b", "b (noise level)"]) == .025
-    assert float(tuning.loc["Fixed b", "Trace c"]) == .025
-    assert tuning.loc["Fixed b", "Trace ε"] == "—"
+    assert "Fixed b" not in tuning.index
+    assert "a cap active" not in tuning.columns
+    for table in app.dataframe:
+        if "Method" in table.value.columns:
+            assert "Fixed b" not in table.value["Method"].values
     assert not tuning.isna().any().any()
     assert "Same-sample ratio" not in tuning.index
     assert tuning.loc["Trace tuning", "b (noise level)"] != 7
