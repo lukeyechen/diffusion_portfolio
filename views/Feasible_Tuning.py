@@ -6,8 +6,9 @@ import streamlit as st
 
 from core.data import download_yahoo_returns, load_returns_csv
 from core.diffusion_exposure import completed_yahoo_returns
-from core.feasible_tuning import TuningSettings, coefficients, fit_portfolios, gaussian_experiment, historical_backtest
-from core.short_horizon_portfolio import HORIZON_PRESETS, aggregate_nonoverlapping, get_horizon_preset, performance_metrics
+from core.feasible_tuning import (OLD_METHOD, TradingComparison, TuningSettings, coefficients,
+                                 gaussian_experiment, historical_backtest, latest_portfolios)
+from core.short_horizon_portfolio import CANDIDATE_T, HORIZON_PRESETS, aggregate_nonoverlapping, get_horizon_preset, performance_metrics
 
 
 @st.cache_data(show_spinner=False, ttl=3600)
@@ -23,9 +24,15 @@ def _download(tickers, start, period):
 
 
 @st.cache_data(show_spinner=False)
-def _history(returns, settings, window, pilot_size, start, rf, cost, cap):
-    return historical_backtest(returns, settings, window=window, pilot_size=pilot_size,
-                               oos_start=start, rf=rf, cost_bps=cost, cap=cap)
+def _history(returns, settings, window, start, rf, cost, cap, trading):
+    return historical_backtest(returns, settings, window=window,
+                               oos_start=start, rf=rf, cost_bps=cost, cap=cap, trading=trading)
+
+
+@st.cache_data(show_spinner=False)
+def _latest(returns, settings, history, window, rf, cap, trading):
+    return latest_portfolios(returns, settings, history, window=window,
+                             rf=rf, cap=cap, trading=trading)
 
 
 @st.cache_data(show_spinner=False)
@@ -34,7 +41,7 @@ def _gaussian(mu, sigma, settings, n, repetitions, seed):
 
 
 st.title("Feasible Tuning")
-st.caption("Exact continuous-time Gaussian portfolio moments with fixed, pilot, same-sample ratio and trace tuning.")
+st.caption("Trace tuning, one same-sample ratio comparator, and a comparison with the old Portfolio method.")
 experiment = st.radio("Experiment", ["Historical backtest", "Gaussian theorem check"], horizontal=True)
 st.info(
     "The positive trace coefficient applies to asymptotic expected utility under the paper's Gaussian, "
@@ -42,10 +49,18 @@ st.info(
     "are empirical comparisons. This is unconditional portfolio tuning, separate from Diffusion OLS."
 )
 
+shared = st.session_state.get("shared_current_window", {})
+has_shared = (isinstance(shared.get("full_returns"), pd.DataFrame)
+              and shared.get("holding_period") in HORIZON_PRESETS)
+use_shared = False
+if experiment == "Historical backtest" and has_shared:
+    use_shared = st.checkbox("Use Portfolio tab's saved data and settings", value=True)
+defaults = shared if use_shared else {}
+
 s1, s2, s3 = st.columns(3)
 gamma = s1.number_input("Risk aversion γ", min_value=0.01,
-                        value=1.0 if experiment == "Gaussian theorem check" else 3.0,
-                        key="feasible_gamma_" + experiment)
+                        value=1.0 if experiment == "Gaussian theorem check" else float(defaults.get("gamma", 3.0)),
+                        key="feasible_gamma_" + experiment + str(use_shared))
 c = s2.number_input("Trace c (0 < c ≤ 4)", min_value=0.01, max_value=4.0, value=4.0)
 epsilon = s3.number_input("Trace ε", min_value=0.000001, value=0.25, format="%.6f",
                           help="Positive variance-scale constant chosen before using the main sample.")
@@ -67,9 +82,8 @@ with st.expander("Implemented rules and theorem scope"):
     st.latex(r"D=(1-a)I+aH,\quad m=(1-a)D^{-1}u,\quad S=H-a^2H^3D^{-2},\quad w=S^{-1}m/\gamma")
     st.latex(r"K_{2,\rm tr}=\gamma^{-1}\left[cA/D_\varepsilon+(2c-c^2/2)Q/D_\varepsilon^2\right]")
     st.write("Here A = (N+2)‖μ‖² + tr(Σ), Q = μᵀΣμ, and Dε = ε + tr(Σ). For c=4, the Q term cancels and the coefficient is positive, including μ=0.")
-    st.write("The engine uses centered MLE covariance and exact proxy endpoint moments directly (the infinite-synthetic-sample limit). No Euler steps or real/synthetic mixture are applied.")
-    st.write("Ratio rules are bounded A/Q plug-ins. Same-sample tuning includes the derivative interaction Ξg; consistency alone does not guarantee a gain. Independent pilot tuning supplies only b; classical and diffusion weights both use the same main block.")
-    st.write("The pilot in the historical test is a preceding disjoint block. Such blocks are independent under i.i.d. sampling; real stock-return blocks need not be independent. The extra classical benchmark uses main plus pilot observations to show the cost of holding data out.")
+    st.write("The direct tuning rules use centered MLE covariance and exact continuous-time endpoint moments, without Euler steps or a real/synthetic mixture. The old comparator retains its original finite-step moments and mixture.")
+    st.write("The retained ratio method is the bounded same-sample A/Q plug-in. Its derivative interaction Ξg means consistency alone does not guarantee a gain. All displayed methods use the same main estimation block; no pilot block is held out.")
     st.write("Choose c, ε and bounds before examining the main sample. The theorem is not a guarantee for parameters selected retrospectively to maximize this backtest. Returns are in decimal units and the identity reference makes coordinate units consequential.")
 
 if experiment == "Gaussian theorem check":
@@ -85,67 +99,108 @@ if experiment == "Gaussian theorem check":
         rho = 0.0
     mu = np.full(assets, mu_scalar)
     sigma = variance * ((1-rho)*np.eye(assets) + rho*np.ones((assets, assets)))
-    st.dataframe(coefficients(mu, sigma, settings), hide_index=True, use_container_width=True)
+    population = coefficients(mu, sigma, settings)
+    st.dataframe(population[population["Method"] != "Pilot ratio"], hide_index=True, use_container_width=True)
     g5, g6, g7 = st.columns(3)
     n = g5.number_input("Main sample size n", min_value=max(10, assets+5), max_value=5000, value=500)
     repetitions = g6.number_input("Monte Carlo repetitions", min_value=100, max_value=10000, value=1000)
     seed = g7.number_input("Random seed", min_value=0, value=42)
-    st.caption("Each repetition uses an independent pilot of size n. Reported Monte Carlo standard errors measure simulation uncertainty; n² mean gain approaches K2 only asymptotically.")
+    st.caption("Each repetition uses one main sample of size n. Reported Monte Carlo standard errors measure simulation uncertainty; n² mean gain approaches K2 only asymptotically. The old constrained trading strategy is compared in the historical mode.")
     if st.button("Run Gaussian check", type="primary"):
         with st.spinner("Evaluating true Gaussian utility on paired samples..."):
             result = _gaussian(mu, sigma, settings, n, repetitions, seed)
         st.dataframe(result.style.format(precision=6), hide_index=True, use_container_width=True)
-        st.caption("The main-plus-pilot classical row uses twice as much estimation data. No K2 from the pilot corollary is assigned to that different-data benchmark.")
     st.stop()
 
-source = st.radio("Data source", ["Yahoo Finance", "Upload CSV"], horizontal=True)
-d1, d2, d3 = st.columns([2, 1, 1])
-tickers = tuple(dict.fromkeys(t.strip().upper() for t in d1.text_input("Tickers", "AAPL,MSFT,NVDA,GOOGL,AMZN").split(",") if t.strip()))
-start = d2.text_input("Data history starts", "2000-01-01")
-period = d3.selectbox("Holding / rebalance interval", list(HORIZON_PRESETS))
-returns = None
-if source == "Yahoo Finance":
-    signature = (tickers, start, period)
-    if st.button("Download / refresh feasible-tuning data"):
-        try:
-            with st.spinner("Downloading completed return periods..."):
-                downloaded = _download(tickers, start, period)
-            st.session_state["feasible_data"] = (signature, downloaded)
-        except Exception as exc:
-            st.error(f"Data download failed: {exc}")
-    saved = st.session_state.get("feasible_data")
-    if saved is not None and saved[0] == signature:
-        returns = saved[1]
+if use_shared:
+    returns = shared["full_returns"].copy()
+    period = shared["holding_period"]
+    st.caption(f"Using the Portfolio tab's saved data: {', '.join(returns.columns)}; {period}; data through {pd.Timestamp(returns.index[-1]).date()}. Settings below can be adjusted before running.")
+    if shared.get("mean_model", "Original diffusion mean") != "Original diffusion mean":
+        st.warning("The old-method comparator uses Original diffusion mean. Your saved Portfolio used a different mean model, so this row will not reproduce that saved forecast-based recommendation.")
 else:
-    upload = st.file_uploader("CSV of already sampled holding-period stock returns", type="csv")
-    if upload is not None:
-        returns = load_returns_csv(upload)
+    source = st.radio("Data source", ["Yahoo Finance", "Upload CSV"], horizontal=True)
+    d1, d2, d3 = st.columns([2, 1, 1])
+    tickers = tuple(dict.fromkeys(t.strip().upper() for t in d1.text_input("Tickers", "AAPL,MSFT,NVDA,GOOGL,AMZN").split(",") if t.strip()))
+    start = d2.text_input("Data history starts", "2000-01-01")
+    period = d3.selectbox("Holding / rebalance interval", list(HORIZON_PRESETS))
+    returns = None
+    if source == "Yahoo Finance":
+        signature = (tickers, start, period)
+        if st.button("Download / refresh feasible-tuning data"):
+            try:
+                with st.spinner("Downloading completed return periods..."):
+                    downloaded = _download(tickers, start, period)
+                st.session_state["feasible_data"] = (signature, downloaded)
+            except Exception as exc:
+                st.error(f"Data download failed: {exc}")
+        saved = st.session_state.get("feasible_data")
+        if saved is not None and saved[0] == signature:
+            returns = saved[1]
+    else:
+        upload = st.file_uploader("CSV of already sampled holding-period stock returns", type="csv")
+        if upload is not None:
+            returns = load_returns_csv(upload)
 if returns is None:
     st.info("Download or upload return data to continue.")
     st.stop()
 
-ppy = int(get_horizon_preset(period)["periods_per_year"])
-h1, h2, h3, h4 = st.columns(4)
-window = h1.number_input("Main estimation window", min_value=max(10, returns.shape[1]+1), value=120)
-use_pilot = h2.checkbox("Compare pilot tuning", value=True)
-pilot_size = h2.number_input("Pilot observations", min_value=max(10, returns.shape[1]+1), value=120, disabled=not use_pilot)
-annual_rf = h3.number_input("Annual risk-free return (%)", min_value=-99.0, value=0.0)
-cost = h4.number_input("Trading cost (bps per turnover)", min_value=0.0, max_value=500.0, value=0.0)
+cfg = get_horizon_preset(period)
+ppy = int(cfg["periods_per_year"])
+allocation = st.radio("Allocation", ["Turnover-controlled comparison with old Portfolio",
+                                     "Theorem weights (unconstrained)",
+                                     "Long-only with cash (empirical comparison)"], horizontal=True)
+practical = allocation.startswith("Turnover-controlled")
+required = int(cfg["min_train_size"]) + int(cfg["inner_folds"])*int(cfg["validation_size"])
+minimum = max(10, returns.shape[1]+1, required if practical else 0)
+h1, h2, h3 = st.columns(3)
+window = h1.number_input("Main estimation window", min_value=minimum,
+                         value=max(minimum, int(defaults.get("lookback", cfg["lookback"]))),
+                         key=f"feasible_window_{period}_{use_shared}_{practical}",
+                         help="Every method uses this same trailing block. Weekly Portfolio preset: 520 observations.")
+annual_rf = h2.number_input("Annual risk-free return (%)", min_value=-99.0, value=0.0,
+                            disabled=practical)
+cost = h3.number_input("Trading cost (bps per turnover)", min_value=0.0, max_value=500.0,
+                       value=25.0 if practical else 0.0, key=f"feasible_cost_{practical}")
+if practical:
+    annual_rf = 0.0
 rf = (1+annual_rf/100)**(1/ppy)-1
-oos_start = st.text_input("Backtest start date", "2019-01-01")
-allocation = st.radio("Allocation", ["Theorem weights (unconstrained)", "Long-only with cash (empirical comparison)"], horizontal=True)
+oos_start = st.text_input("Backtest / strategy replay start date", str(defaults.get("replay_start", "2019-01-01")))
 cap = None
+trading = None
+if practical:
+    st.info("All methods use the same window, risk aversion, fully invested weight cap, turnover penalty and partial rebalance step. Each method replays its own holdings from equal weights on the same start date. Trace, fixed b and ratio use direct endpoint moments; the old method keeps its original Best-T grid, finite-step moments and real/synthetic mixture. This trading comparison is empirical.")
+    t1, t2, t3 = st.columns(3)
+    cap = t1.number_input("Maximum weight per stock", min_value=1.0/returns.shape[1], max_value=1.0,
+                          value=max(1.0/returns.shape[1], float(defaults.get("max_long_weight", 0.4))),
+                          key=f"feasible_trading_cap_{use_shared}")
+    penalty = t2.number_input("Turnover penalty (bps)", min_value=0.0, max_value=100.0,
+                              value=10000*float(defaults.get("turnover_penalty", 0.0025)),
+                              key=f"feasible_penalty_{use_shared}")
+    alpha = t3.number_input("Rebalance step (%)", min_value=1.0, max_value=100.0,
+                            value=100*float(defaults.get("rebalance_alpha", 0.5 if period == "1 week" else 1.0)),
+                            key=f"feasible_alpha_{period}_{use_shared}")
+    with st.expander("Old method settings"):
+        t4, t5, t6 = st.columns(3)
+        m = t4.number_input("Old-method synthetic-equivalent M", min_value=0, value=int(defaults.get("m", 500)))
+        beta = t5.number_input("Constant β", min_value=0.01, value=float(defaults.get("beta", 1.0)))
+        steps = t6.number_input("Old-method reverse SDE steps", min_value=10, value=int(defaults.get("n_steps", 100)))
+        st.caption(f"Old method candidate T grid: {CANDIDATE_T}. Trace tuning calculates T directly.")
+    trading = TradingComparison(inner_folds=int(cfg["inner_folds"]),
+                                validation_size=int(cfg["validation_size"]),
+                                min_train_size=int(cfg["min_train_size"]),
+                                turnover_penalty=penalty/10000, rebalance_alpha=alpha/100,
+                                cap=cap, m=m, beta=beta, n_steps=steps)
 if allocation.startswith("Long-only"):
     cap = st.number_input("Maximum weight per stock", min_value=0.01, max_value=1.0, value=0.4)
-else:
+elif not practical:
     st.caption("Unconstrained weights can be negative or sum above 100%; cash can represent borrowing. They are not normalized to a fully invested long-only portfolio.")
 
-signature = (returns.to_json(), settings, window, pilot_size if use_pilot else 0, oos_start, rf, cost, cap)
+signature = (returns.to_json(), settings, window, oos_start, rf, cost, cap, trading)
 if st.button("Run feasible-tuning backtest", type="primary"):
     try:
-        with st.spinner("Comparing exact proxy allocations through history..."):
-            result = _history(returns, settings, window, pilot_size if use_pilot else 0,
-                              oos_start, rf, cost, cap)
+        with st.spinner("Replaying the common comparison; the old method runs nested T validation each period..." if practical else "Comparing direct allocations through history..."):
+            result = _history(returns, settings, window, oos_start, rf, cost, cap, trading)
         st.session_state["feasible_result"] = (signature, result)
     except (ValueError, RuntimeError, np.linalg.LinAlgError) as exc:
         st.error(str(exc))
@@ -168,15 +223,21 @@ for method, group in result.groupby("Method", sort=False):
 st.dataframe(pd.DataFrame(summary).style.format({k: "{:.2%}" for k in summary[0] if k != "Method"}), hide_index=True, use_container_width=True)
 st.line_chart(pd.DataFrame(wealth), use_container_width=True)
 st.caption("Wealth index starts at 1. Historical MV statistics do not estimate the theorem's population K2 directly.")
-pilot = returns.iloc[-window-pilot_size:-window].to_numpy()-rf if use_pilot else None
+if practical:
+    table = pd.DataFrame(summary).set_index("Method")
+    st.subheader("Trace tuning versus old Portfolio")
+    compare = table.loc[[OLD_METHOD, "Trace tuning"]].reset_index()
+    st.dataframe(compare.style.format({k: "{:.2%}" for k in compare.columns if k != "Method"}), hide_index=True, use_container_width=True)
+    st.caption(f"Trace − old total return: {100*(table.loc['Trace tuning', 'Total return']-table.loc[OLD_METHOD, 'Total return']):+.2f} percentage points. Trace − old annualized MV excess: {100*(table.loc['Trace tuning', 'Annualized MV excess']-table.loc[OLD_METHOD, 'Annualized MV excess']):+.2f} percentage points. This is the complete historical test.")
 try:
-    latest, tuning = fit_portfolios(returns.iloc[-window:].to_numpy()-rf, settings, pilot=pilot, cap=cap)
+    latest, tuning = _latest(returns, settings, result, window, rf, cap, trading)
     st.subheader("Next-period target weights")
+    st.caption(f"Common estimation block: {pd.Timestamp(returns.index[-window]).date()} to {pd.Timestamp(returns.index[-1]).date()}, n={window}, γ={gamma:g}. " + (f"Turnover penalty {penalty:g} bps, rebalance step {alpha:g}%, cap {cap:.0%}." if practical else "No turnover penalty or partial-rebalance adjustment to the targets."))
     st.dataframe(pd.DataFrame([{"Method": name, **dict(zip(returns.columns, w)), "Cash": 1-w.sum()} for name,w in latest.items()]).style.format({k: "{:.2%}" for k in [*returns.columns,"Cash"]}), hide_index=True, use_container_width=True)
     st.subheader("Latest tuning values")
     st.dataframe(tuning, hide_index=True, use_container_width=True)
     st.caption("An active a cap changes the finite-sample rule. For sufficiently large n the cap becomes inactive under the bounded rules.")
-except ValueError as exc:
+except (ValueError, RuntimeError, np.linalg.LinAlgError) as exc:
     st.error(str(exc))
 with st.expander("Rolling detail"):
     st.dataframe(result, hide_index=True, use_container_width=True)
