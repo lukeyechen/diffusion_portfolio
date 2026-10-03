@@ -65,39 +65,41 @@ def test_historical_controls_and_results_without_live_download():
     allocation.set_value("Long-only with cash (empirical comparison)").run()
     window = next(item for item in app.number_input if item.label == "Main estimation window")
     window.set_value(120).run()
-    _field(app, "text_input", "Backtest / strategy replay start date").set_value("2019-01-01").run()
+    _field(app, "text_input", "Backtest / strategy replay start date").set_value("2021-01-01").run()
+    _field(app, "text_input", "c candidates (0 < c ≤ 4; maximum 12)").set_value("1,4").run()
+    _field(app, "text_input", "Joint ε candidates (maximum 12)").set_value(".01,.25").run()
     run = next(item for item in app.button if item.label == "Run feasible-tuning backtest")
     run.click().run(timeout=30)
     assert not app.exception
     assert not app.error
-    assert len(app.dataframe) == 5
-    assert "Trace tuning" in app.dataframe[0].value["Method"].values
-    assert list(app.dataframe[0].value["Method"]).count("Classical MV") == 1
-    assert "Classical MV + turnover control" not in app.dataframe[0].value["Method"].values
-    raw = app.dataframe[1].value.set_index("Method").loc["Classical MV"]
-    final = app.dataframe[2].value.set_index("Method").loc["Classical MV"]
+    assert len(app.dataframe) == 7
+    assert "Trace tuning" in app.dataframe[2].value["Method"].values
+    assert list(app.dataframe[2].value["Method"]).count("Classical MV") == 1
+    assert "Classical MV + turnover control" not in app.dataframe[2].value["Method"].values
+    raw = app.dataframe[3].value.set_index("Method").loc["Classical MV"]
+    final = app.dataframe[4].value.set_index("Method").loc["Classical MV"]
     np.testing.assert_allclose(raw.to_numpy(dtype=float), final.to_numpy(dtype=float))
     assert (final.to_numpy(dtype=float) >= 0).all()
     assert (final.to_numpy(dtype=float) <= .4 + 1e-7).all()
     assert "Backtest / strategy replay start date" in [item.label for item in app.text_input]
-    assert "Pilot ratio" not in app.dataframe[0].value["Method"].values
+    assert "Pilot ratio" not in app.dataframe[2].value["Method"].values
 
 
 def test_comparison_controls_reuse_saved_portfolio_settings():
     app = AppTest.from_file(PAGE)
-    frame = pd.DataFrame(np.random.default_rng(3).normal(0.001, 0.02, (530, 5)),
-                         index=pd.date_range("2015-01-02", periods=530, freq="W-FRI"),
+    frame = pd.DataFrame(np.random.default_rng(3).normal(0.001, 0.02, (540, 5)),
+                         index=pd.date_range("2015-01-02", periods=540, freq="W-FRI"),
                          columns=["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN"])
     snapshot = dict(
         full_returns=frame, holding_period="1 week", lookback=520, gamma=4.0,
         max_long_weight=0.4, turnover_penalty=0.0015, rebalance_alpha=0.6,
-        m=100, beta=1.5, n_steps=10, replay_start="2024-01-01",
+        m=100, beta=1.5, n_steps=10, replay_start="2025-01-01",
     )
     cfg = get_horizon_preset("1 week")
     rec = replay_latest_recommendation(frame, cfg, gamma=4.0, m=100, beta=1.5,
                                        n_steps=10, turnover_penalty=.0015,
                                        rebalance_alpha=.6, max_long_weight=.4,
-                                       replay_start="2024-01-01")
+                                       replay_start="2025-01-01")
     u, h = moments(frame.iloc[-520:].to_numpy())
     snapshot.update(weights=rec["weights"], validation_config=cfg,
                     classical_weights=compute_weights(
@@ -114,14 +116,16 @@ def test_comparison_controls_reuse_saved_portfolio_settings():
     assert fields["Old-method synthetic-equivalent M"] == 100
     assert fields["Constant β"] == 1.5
     assert fields["Old-method reverse SDE steps"] == 10
-    assert _field(app, "text_input", "Backtest / strategy replay start date").value == "2024-01-01"
+    assert _field(app, "text_input", "Backtest / strategy replay start date").value == "2025-01-01"
     assert _field(app, "number_input", "Main estimation window").disabled
     assert not any("Pilot" in item.label for item in app.checkbox)
+    _field(app, "text_input", "c candidates (0 < c ≤ 4; maximum 12)").set_value("1,4").run()
+    _field(app, "text_input", "Joint ε candidates (maximum 12)").set_value(".01,.25").run()
     run = next(item for item in app.button if item.label == "Run feasible-tuning backtest")
     run.click().run(timeout=60)
     assert not app.exception
     assert not app.error
-    assert len(app.dataframe) == 7
+    assert len(app.dataframe) == 9
     assert any("both match the saved Portfolio" in item.value for item in app.success)
     assert "Old Portfolio (Best-T + turnover control)" in app.dataframe[2].value["Method"].values
     assert "Pilot ratio" not in app.dataframe[2].value["Method"].values
@@ -134,15 +138,14 @@ def test_historical_results_survive_navigation_and_new_portfolio_snapshot():
     app.run()
     _field(app, "radio", "Allocation").set_value("Long-only with cash (empirical comparison)").run()
     _field(app, "number_input", "Main estimation window").set_value(120).run()
-    _field(app, "text_input", "Backtest / strategy replay start date").set_value("2019-01-01").run()
+    _field(app, "text_input", "Backtest / strategy replay start date").set_value("2021-01-01").run()
     _field(app, "number_input", "Risk aversion γ").set_value(2.4).run()
-    _field(app, "number_input", "Trace c (0 < c ≤ 4)").set_value(3.0).run()
     _field(app, "number_input", "Trading cost (bps per turnover)").set_value(10.0).run()
     _field(app, "button", "Run feasible-tuning backtest").click().run(timeout=30)
     assert not app.exception
     assert not app.error
     original = [item.value.copy() for item in app.dataframe]
-    assert len(original) == 5
+    assert len(original) == 7
     app.sidebar.radio[0].set_value("Other").run()
     assert not app.number_input
     # The Portfolio page can create a snapshot while Feasible Tuning is absent.
@@ -155,7 +158,6 @@ def test_historical_results_survive_navigation_and_new_portfolio_snapshot():
     assert not _field(app, "checkbox", "Use Portfolio tab's saved data and settings").value
     assert _field(app, "number_input", "Main estimation window").value == 120
     assert _field(app, "number_input", "Risk aversion γ").value == 2.4
-    assert _field(app, "number_input", "Trace c (0 < c ≤ 4)").value == 3.0
     assert _field(app, "number_input", "Trading cost (bps per turnover)").value == 10.0
     assert len(app.dataframe) == len(original)
     for before, after in zip(original, app.dataframe):
@@ -188,7 +190,7 @@ def test_uploaded_data_and_results_survive_navigation():
     _field(app, "radio", "Data source").set_value("Upload CSV").run()
     _field(app, "radio", "Allocation").set_value("Long-only with cash (empirical comparison)").run()
     _field(app, "number_input", "Main estimation window").set_value(120).run()
-    _field(app, "text_input", "Backtest / strategy replay start date").set_value("2019-01-01").run()
+    _field(app, "text_input", "Backtest / strategy replay start date").set_value("2021-01-01").run()
     _field(app, "button", "Run feasible-tuning backtest").click().run(timeout=30)
     assert not app.exception
     assert not app.error
@@ -196,17 +198,17 @@ def test_uploaded_data_and_results_survive_navigation():
     _leave_and_return(app)
     assert _field(app, "radio", "Data source").value == "Upload CSV"
     assert any("returns.csv" in item.value for item in app.caption)
-    assert len(app.dataframe) == 5
+    assert len(app.dataframe) == 7
     pd.testing.assert_frame_equal(original, app.dataframe[0].value)
 
 
 def test_shared_snapshot_refresh_overrides_stale_common_inputs():
     app = AppTest.from_string(NAVIGATION_APP)
-    frame = pd.DataFrame(np.random.default_rng(3).normal(.001, .02, (530, 5)),
-                         index=pd.date_range("2015-01-02", periods=530, freq="W-FRI"),
+    frame = pd.DataFrame(np.random.default_rng(3).normal(.001, .02, (540, 5)),
+                         index=pd.date_range("2015-01-02", periods=540, freq="W-FRI"),
                          columns=["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN"])
     snapshot = dict(full_returns=frame, holding_period="1 week", lookback=520,
-                    gamma=4.0, max_long_weight=.4, n_steps=10, replay_start="2024-01-01")
+                    gamma=4.0, max_long_weight=.4, n_steps=10, replay_start="2025-01-01")
     app.session_state["shared_current_window"] = snapshot
     app.run()
     app.sidebar.radio[0].set_value("Other").run()
@@ -216,29 +218,6 @@ def test_shared_snapshot_refresh_overrides_stale_common_inputs():
     assert _field(app, "number_input", "Risk aversion γ").value == 2.0
     assert _field(app, "text_input", "Backtest / strategy replay start date").value == "2023-01-01"
     assert _field(app, "radio", "Allocation").value == "Turnover-controlled comparison with old Portfolio"
-
-
-def test_epsilon_experiment_survives_navigation_and_leaves_main_setting_unchanged():
-    app = AppTest.from_string(NAVIGATION_APP)
-    returns = _returns()
-    app.session_state["feasible_data"] = ((tuple(returns.columns), "2000-01-01", "1 week"), returns)
-    app.run()
-    _field(app, "radio", "Allocation").set_value("Long-only with cash (empirical comparison)").run()
-    _field(app, "number_input", "Main estimation window").set_value(120).run()
-    _field(app, "text_input", "Backtest / strategy replay start date").set_value("2019-01-01").run()
-    _field(app, "radio", "Trace calibration mode").set_value("ε only (fixed c)").run()
-    _field(app, "text_input", "Joint ε candidates (maximum 12)").set_value("0.001,0.25").run()
-    _field(app, "text_input", "c final evaluation starts").set_value(str(returns.index[220].date())).run()
-    _field(app, "button", "Run c calibration and final evaluation").click().run(timeout=30)
-    assert not app.exception
-    assert not app.error
-    assert len(app.dataframe) == 2
-    original = [item.value.copy() for item in app.dataframe]
-    assert _field(app, "number_input", "Trace ε").value == .25
-    _leave_and_return(app)
-    assert len(app.dataframe) == 2
-    for before, after in zip(original, app.dataframe):
-        pd.testing.assert_frame_equal(before, after.value)
 
 
 def test_live_upgrade_refreshes_stale_feasible_module_once():
@@ -259,46 +238,6 @@ def test_live_upgrade_refreshes_stale_feasible_module_once():
             module.epsilon_sensitivity = original
 
 
-def test_c_calibration_and_joint_results_survive_navigation():
-    app = AppTest.from_string(NAVIGATION_APP)
-    returns = _returns()
-    app.session_state["feasible_data"] = ((tuple(returns.columns), "2000-01-01", "1 week"), returns)
-    app.run()
-    _field(app, "radio", "Allocation").set_value("Long-only with cash (empirical comparison)").run()
-    _field(app, "number_input", "Main estimation window").set_value(120).run()
-    _field(app, "text_input", "Backtest / strategy replay start date").set_value("2019-01-01").run()
-    assert _field(app, "text_input", "c calibration starts").value == "2000-01-01"
-    from datetime import datetime
-    from zoneinfo import ZoneInfo
-    assert _field(app, "text_input", "c calibration / evaluation end date").value == datetime.now(ZoneInfo("America/Havana")).date().isoformat()
-    _field(app, "text_input", "c candidates (0 < c ≤ 4; maximum 12)").set_value("1,4").run()
-    _field(app, "text_input", "c final evaluation starts").set_value(str(returns.index[220].date())).run()
-    _field(app, "button", "Run c calibration and final evaluation").click().run(timeout=30)
-    assert not app.exception and not app.error
-    assert len(app.dataframe[0].value) == 2
-    assert app.dataframe[0].value["ε"].eq(.25).all()
-    original = app.dataframe[0].value.copy()
-    _leave_and_return(app)
-    pd.testing.assert_frame_equal(original, app.dataframe[0].value)
-    assert _field(app, "number_input", "Trace c (0 < c ≤ 4)").value == 4
-    _field(app, "radio", "Trace calibration mode").set_value("Joint c and ε").run()
-    assert not app.dataframe
-    _field(app, "text_input", "Joint ε candidates (maximum 12)").set_value(".01,.25").run()
-    _field(app, "button", "Run c calibration and final evaluation").click().run(timeout=30)
-    assert not app.exception and not app.error
-    assert len(app.dataframe[0].value) == 4
-    final = app.dataframe[1].value.set_index("Method")
-    calibration = app.dataframe[0].value
-    winner = calibration.loc[calibration["Annualized MV excess"].idxmax()]
-    assert float(final.loc["Trace tuning", "Selected c"]) == winner["c"]
-    assert float(final.loc["Trace tuning", "Selected ε"]) == winner["ε"]
-    assert final.loc["Classical MV", "Selected c"] == "—"
-    assert any("Selected calibration settings used below" in item.value for item in app.success)
-    _field(app, "text_input", "c candidates (0 < c ≤ 4; maximum 12)").set_value("5").run()
-    _field(app, "button", "Run c calibration and final evaluation").click().run(timeout=30)
-    assert app.error and not app.exception
-
-
 def test_replay_default_is_six_calendar_months_before_today():
     from datetime import datetime
     from zoneinfo import ZoneInfo
@@ -310,23 +249,33 @@ def test_replay_default_is_six_calendar_months_before_today():
     assert _field(app, "text_input", "Backtest / strategy replay start date").value == expected
 
 
-def test_calibration_apply_and_fixed_b_are_independent():
-    app = AppTest.from_file(PAGE)
+def test_automatic_joint_selection_and_navigation():
+    app = AppTest.from_string(NAVIGATION_APP)
     returns = _returns()
     app.session_state["feasible_data"] = ((tuple(returns.columns), "2000-01-01", "1 week"), returns)
     app.run()
     _field(app, "radio", "Allocation").set_value("Long-only with cash (empirical comparison)").run()
     _field(app, "number_input", "Main estimation window").set_value(120).run()
-    _field(app, "text_input", "c candidates (0 < c ≤ 4; maximum 12)").set_value(".25").run()
-    _field(app, "text_input", "c final evaluation starts").set_value(str(returns.index[220].date())).run()
-    _field(app, "button", "Run c calibration and final evaluation").click().run(timeout=30)
+    _field(app, "text_input", "Backtest / strategy replay start date").set_value(str(returns.index[220].date())).run()
+    _field(app, "text_input", "c candidates (0 < c ≤ 4; maximum 12)").set_value(".25,1").run()
+    _field(app, "text_input", "Joint ε candidates (maximum 12)").set_value(".01,.25").run()
+    assert not any(item.label in ("Trace c (0 < c ≤ 4)", "Trace ε", "Maximum a") for item in app.number_input)
+    assert not any("Apply selected" in item.label for item in app.button)
+    _field(app, "button", "Run feasible-tuning backtest").click().run(timeout=30)
     assert not app.exception and not app.error
-    _field(app, "button", "Apply selected c and ε to main backtest").click().run()
-    assert _field(app, "number_input", "Trace c (0 < c ≤ 4)").value == .25
-    assert not any(item.label == "Fixed b comparator" for item in app.number_input)
-    assert len(app.expander) == 2  # rules and the single calibration panel
-    buttons = [item.label for item in app.button]
-    assert buttons.index("Run c calibration and final evaluation") < buttons.index("Run feasible-tuning backtest")
+    calibration = app.dataframe[0].value
+    assert len(calibration) == 4
+    winner = calibration.loc[calibration["Annualized MV excess"].idxmax()]
+    tuning = next(item.value for item in app.dataframe if "Trace c" in item.value.columns).set_index("Method")
+    assert float(tuning.loc["Trace tuning", "Trace c"]) == winner["c"]
+    assert float(tuning.loc["Trace tuning", "Trace ε"]) == winner["ε"]
+    original = [item.value.copy() for item in app.dataframe]
+    _leave_and_return(app)
+    for before, after in zip(original, app.dataframe):
+        pd.testing.assert_frame_equal(before, after.value)
+    _field(app, "text_input", "c candidates (0 < c ≤ 4; maximum 12)").set_value("5").run()
+    _field(app, "button", "Run feasible-tuning backtest").click().run(timeout=30)
+    assert app.error and not app.exception
 
 
 def test_trace_c_precision_and_latest_noise_labels():
@@ -336,8 +285,8 @@ def test_trace_c_precision_and_latest_noise_labels():
     app.run()
     _field(app, "radio", "Allocation").set_value("Long-only with cash (empirical comparison)").run()
     _field(app, "number_input", "Main estimation window").set_value(120).run()
-    _field(app, "text_input", "Backtest / strategy replay start date").set_value("2019-01-01").run()
-    _field(app, "number_input", "Trace c (0 < c ≤ 4)").set_value(.025).run()
+    _field(app, "text_input", "Backtest / strategy replay start date").set_value("2021-01-01").run()
+    _field(app, "text_input", "c candidates (0 < c ≤ 4; maximum 12)").set_value(".025").run()
     _field(app, "button", "Run feasible-tuning backtest").click().run(timeout=30)
     assert not app.exception and not app.error
     tuning = next(item.value for item in app.dataframe if "Trace c" in item.value.columns).set_index("Method")
