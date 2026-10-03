@@ -185,7 +185,7 @@ if use_shared:
     period = shared["holding_period"]
     st.caption(f"Using the Portfolio tab's saved data: {', '.join(returns.columns)}; {period}; data through {pd.Timestamp(returns.index[-1]).date()}. Common settings are locked to the saved recommendation; turn off the shared-data option to edit them independently.")
     if not shared.get("replay_start"):
-        st.warning("This older Portfolio result did not save its replay date. Rerun Portfolio to publish a complete comparison snapshot. The fallback replay date is 2019-01-01.")
+        st.warning("This older Portfolio result did not save its replay date. Rerun Portfolio to publish a complete comparison snapshot. The fallback replay date is six calendar months before today.")
     if shared.get("mean_model", "Original diffusion mean") != "Original diffusion mean":
         st.info("The old Portfolio comparator uses your saved forecast model. The classical and direct tuning methods estimate unconditional sample means, as specified by the feasible-tuning experiment.")
 else:
@@ -244,7 +244,8 @@ cost = _input(h3, "number_input", "Trading cost (bps per turnover)", min_value=0
 if practical:
     annual_rf = 0.0
 rf = (1+annual_rf/100)**(1/ppy)-1
-oos_start = _input(st, "text_input", "Backtest / strategy replay start date", value=str(defaults.get("replay_start") or "2019-01-01"), key=f"replay_start_{use_shared}", sync=use_shared, disabled=use_shared)
+replay_default = (pd.Timestamp(datetime.now(ZoneInfo("America/Havana")).date()) - pd.DateOffset(months=6)).date().isoformat()
+oos_start = _input(st, "text_input", "Backtest / strategy replay start date", value=str(defaults.get("replay_start") or replay_default), key=f"replay_start_{use_shared}", sync=use_shared, disabled=use_shared)
 cap = None
 trading = None
 if practical:
