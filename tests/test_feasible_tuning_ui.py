@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from core.short_horizon_portfolio import get_horizon_preset, replay_latest_recommendation
 from core.feasible_tuning import moments
+from core.portfolio_rules import compute_weights
 
 PAGE = Path(__file__).resolve().parents[1] / "views" / "Feasible_Tuning.py"
 NAVIGATION_APP = f"""
@@ -75,6 +76,8 @@ def test_historical_controls_and_results_without_live_download():
     raw = app.dataframe[1].value.set_index("Method").loc["Classical MV"]
     final = app.dataframe[2].value.set_index("Method").loc["Classical MV"]
     np.testing.assert_allclose(raw.to_numpy(dtype=float), final.to_numpy(dtype=float))
+    assert (final.to_numpy(dtype=float) >= 0).all()
+    assert (final.to_numpy(dtype=float) <= .4 + 1e-7).all()
     assert "Backtest / strategy replay start date" in [item.label for item in app.text_input]
     assert "Pilot ratio" not in app.dataframe[0].value["Method"].values
 
@@ -96,8 +99,9 @@ def test_comparison_controls_reuse_saved_portfolio_settings():
                                        replay_start="2024-01-01")
     u, h = moments(frame.iloc[-520:].to_numpy())
     snapshot.update(weights=rec["weights"], validation_config=cfg,
-                    classical_weights=np.linalg.solve(h, u)/4,
-                    classical_rule="closed-form-unconstrained-v1")
+                    classical_weights=compute_weights(
+                        "Mean-Variance", u, h, gamma=4, constraint_mode="Long-only", max_long_weight=.4),
+                    classical_rule="allocation-aware-classical-v2")
     app.session_state["shared_current_window"] = snapshot
     app.run()
     assert not app.exception

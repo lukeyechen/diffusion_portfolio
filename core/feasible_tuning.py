@@ -19,7 +19,7 @@ from .predictive_means import MEAN_MODELS
 from .short_horizon_portfolio import performance_metrics
 
 OLD_METHOD = "Old Portfolio (Best-T + turnover control)"
-CLASSICAL_MV_RULE = "closed-form-unconstrained-v1"
+CLASSICAL_MV_RULE = "allocation-aware-classical-v2"
 
 
 @dataclass(frozen=True)
@@ -152,9 +152,17 @@ def fit_portfolios(sample, settings, *, pilot=None, cap=None, trading=None, prev
         raw_portfolios[name] = w.copy()
         return w
 
-    # Classical MV is the direct plug-in solution. Trading optimizers, caps and
-    # partial rebalancing apply only to the alternative strategies.
-    classical = np.linalg.solve(h, u) / settings.gamma
+    def classical_weights(mean, covariance):
+        # Respect allocation constraints without turnover penalties or smoothing.
+        if trading is not None:
+            return compute_weights(
+                "Mean-Variance", mean, covariance, gamma=settings.gamma,
+                constraint_mode="Long-only", max_long_weight=trading.cap)
+        if cap is not None:
+            return allocate_exposure(mean, covariance, gamma=settings.gamma, cap=cap)
+        return np.linalg.solve(covariance, mean) / settings.gamma
+
+    classical = classical_weights(u, h)
     portfolios = {"Classical (main sample)": classical}
     raw_portfolios["Classical (main sample)"] = classical.copy()
     diagnostics = []
@@ -173,7 +181,7 @@ def fit_portfolios(sample, settings, *, pilot=None, cap=None, trading=None, prev
         })
     if pilot is not None:
         full_u, full_h = moments(np.concatenate([pilot, sample]))
-        full_classical = np.linalg.solve(full_h, full_u) / settings.gamma
+        full_classical = classical_weights(full_u, full_h)
         portfolios["Classical (main + pilot)"] = full_classical
         raw_portfolios["Classical (main + pilot)"] = full_classical.copy()
     if trading is not None and (methods is None or OLD_METHOD in methods):

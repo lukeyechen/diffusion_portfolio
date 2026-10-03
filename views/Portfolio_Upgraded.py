@@ -300,7 +300,8 @@ if run:
 
     x = returns.iloc[-int(lookback):].to_numpy(dtype=float)
     mu_h, sigma_h = sample_moments(x, mle=True)
-    w_classical = np.linalg.solve(sigma_h, mu_h) / float(gamma)
+    w_classical = compute_weights("Mean-Variance", mu_h, sigma_h, gamma=float(gamma),
+                                  constraint_mode="Long-only", max_long_weight=float(max_long_weight))
     w_lw = compute_weights(
         "Ledoit-Wolf Mean-Variance",
         mu_h,
@@ -328,14 +329,16 @@ if run:
         "mu_hist": np.asarray(mu_h, dtype=float),
         "sigma_hist": np.asarray(sigma_h, dtype=float),
         "w_classical": np.asarray(w_classical, dtype=float),
-        "classical_rule": "closed-form-unconstrained-v1",
+        "classical_rule": "allocation-aware-classical-v2",
         "w_lw": np.asarray(w_lw, dtype=float),
     }
 
 res = st.session_state["upgraded_portfolio_result"]
-if res.get("classical_rule") != "closed-form-unconstrained-v1":
-    res["w_classical"] = np.linalg.solve(res["sigma_hist"], res["mu_hist"]) / float(res["gamma"])
-    res["classical_rule"] = "closed-form-unconstrained-v1"
+if res.get("classical_rule") != "allocation-aware-classical-v2":
+    res["w_classical"] = compute_weights(
+        "Mean-Variance", res["mu_hist"], res["sigma_hist"], gamma=float(res["gamma"]),
+        constraint_mode="Long-only", max_long_weight=float(res["max_long_weight"]))
+    res["classical_rule"] = "allocation-aware-classical-v2"
 rec = res["rec"]
 assets = list(res["returns"].columns)
 w = np.asarray(rec["weights"], dtype=float)
@@ -441,7 +444,7 @@ compare_df = pd.DataFrame(
     }
 )
 st.markdown("**Current-window weight comparison**")
-st.caption("Classical MV uses Σ̂⁻¹μ̂/γ directly, with no weight cap, turnover penalty or partial rebalance. Its risky weights can sum above 100% or include short positions; the remaining weight is cash or borrowing.")
+st.caption("Classical MV uses sample moments with the same long-only weight cap, fully invested. It has no turnover penalty or partial rebalance.")
 st.dataframe(
     compare_df.style.format(
         {c: "{:.2%}" for c in compare_df.columns if c != "Asset"}
@@ -490,7 +493,7 @@ st.session_state["shared_current_window"] = {
     "sigma_used": sigma_used.copy(),
     "weights": w.copy(),
     "classical_weights": np.asarray(res["w_classical"], dtype=float).copy(),
-    "classical_rule": "closed-form-unconstrained-v1",
+    "classical_rule": "allocation-aware-classical-v2",
     "weights_by_asset": {a: float(v) for a, v in zip(assets, w)},
 }
 
