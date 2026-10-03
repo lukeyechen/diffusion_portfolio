@@ -125,7 +125,8 @@ def test_comparison_controls_reuse_saved_portfolio_settings():
     run.click().run(timeout=60)
     assert not app.exception
     assert not app.error
-    assert len(app.dataframe) == 9
+    assert not any(item.value == "Trace tuning versus old Portfolio" for item in app.subheader)
+    assert len(app.dataframe) == 8
     assert any("both match the saved Portfolio" in item.value for item in app.success)
     assert "Old Portfolio (Best-T + turnover control)" in app.dataframe[2].value["Method"].values
     assert "Pilot ratio" not in app.dataframe[2].value["Method"].values

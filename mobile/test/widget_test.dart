@@ -42,5 +42,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Run Diffusion OLS exposure analysis'), findsOneWidget);
     expect(find.text('Backtest start date (YYYY-MM-DD)'), findsOneWidget);
+    await tester.tap(find.text('Feasible Tuning').last);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Run automatically selects c'), findsOneWidget);
+    expect(find.text('Maximum a'), findsNothing);
+    expect(find.text('Trace tuning versus old Portfolio'), findsNothing);
   });
 }
