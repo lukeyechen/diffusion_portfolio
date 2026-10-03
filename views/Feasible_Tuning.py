@@ -318,9 +318,13 @@ with st.expander("ε sensitivity: calibration and final evaluation"):
         formats = {k: "{:.3%}" for k in sensitivity["calibration"].columns if k not in ("ε", "Periods")}
         st.dataframe(sensitivity["calibration"].style.format(formats), hide_index=True, use_container_width=True)
         st.write("Final evaluation: frozen trace versus classical")
+        st.success(f"Selected calibration settings used below: c = {settings.c:g}, ε = {sensitivity['selected_epsilon']:g} (c held fixed).")
         table = sensitivity["evaluation_summary"].copy()
+        table.insert(1, "Selected c", np.where(table["Method"] == "Trace tuning", settings.c, np.nan))
+        table.insert(2, "Selected ε", np.where(table["Method"] == "Trace tuning", sensitivity["selected_epsilon"], np.nan))
+        formats.update({"Selected c": "{:.6g}", "Selected ε": "{:.6g}"})
         table["Method"] = table["Method"].map(lambda name: _label(name, practical))
-        st.dataframe(table.style.format(formats), hide_index=True, use_container_width=True)
+        st.dataframe(table.style.format(formats, na_rep="—"), hide_index=True, use_container_width=True)
         final = sensitivity["evaluation"]
         wealth = { _label(name, practical): pd.Series(np.cumprod(1+group["Net return"].to_numpy()), index=group["Date"])
                    for name, group in final.groupby("Method", sort=False)}
@@ -352,9 +356,13 @@ with st.expander("c calibration and joint c–ε calibration"):
         grid_formats = {k: "{:.3%}" for k in grid_result["calibration"].columns if k not in ("c", "ε", "Periods")}
         st.dataframe(grid_result["calibration"].style.format(grid_formats), hide_index=True, use_container_width=True)
         st.write("Final evaluation: frozen c–ε pair versus Classical MV")
+        st.success(f"Selected calibration settings used below: c = {grid_result['selected_c']:g}, ε = {grid_result['selected_epsilon']:g}.")
         grid_table = grid_result["evaluation_summary"].copy()
+        grid_table.insert(1, "Selected c", np.where(grid_table["Method"] == "Trace tuning", grid_result["selected_c"], np.nan))
+        grid_table.insert(2, "Selected ε", np.where(grid_table["Method"] == "Trace tuning", grid_result["selected_epsilon"], np.nan))
+        grid_formats.update({"Selected c": "{:.6g}", "Selected ε": "{:.6g}"})
         grid_table["Method"] = grid_table["Method"].map(lambda name: _label(name, practical))
-        st.dataframe(grid_table.style.format(grid_formats), hide_index=True, use_container_width=True)
+        st.dataframe(grid_table.style.format(grid_formats, na_rep="—"), hide_index=True, use_container_width=True)
         grid_history = grid_result["evaluation"]
         st.line_chart(pd.DataFrame({_label(name, practical): pd.Series(np.cumprod(1+group["Net return"].to_numpy()), index=group["Date"]) for name, group in grid_history.groupby("Method", sort=False)}))
         st.caption("Choose grids and dates before examining final results. Repeated selection using the final period makes it exploratory. Both strategies start from the same initial allocation at the evaluation boundary.")

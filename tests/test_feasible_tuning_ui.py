@@ -281,6 +281,13 @@ def test_c_calibration_and_joint_results_survive_navigation():
     _field(app, "button", "Run c calibration and final evaluation").click().run(timeout=30)
     assert not app.exception and not app.error
     assert len(app.dataframe[0].value) == 4
+    final = app.dataframe[1].value.set_index("Method")
+    calibration = app.dataframe[0].value
+    winner = calibration.loc[calibration["Annualized MV excess"].idxmax()]
+    assert final.loc["Trace tuning", "Selected c"] == winner["c"]
+    assert final.loc["Trace tuning", "Selected ε"] == winner["ε"]
+    assert pd.isna(final.loc["Classical MV", "Selected c"])
+    assert any("Selected calibration settings used below" in item.value for item in app.success)
     _field(app, "text_input", "c candidates (0 < c ≤ 4; maximum 12)").set_value("5").run()
     _field(app, "button", "Run c calibration and final evaluation").click().run(timeout=30)
     assert app.error and not app.exception
