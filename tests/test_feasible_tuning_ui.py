@@ -261,6 +261,10 @@ def test_c_calibration_and_joint_results_survive_navigation():
     app.run()
     _field(app, "radio", "Allocation").set_value("Long-only with cash (empirical comparison)").run()
     _field(app, "number_input", "Main estimation window").set_value(120).run()
+    assert _field(app, "text_input", "c calibration starts").value == "2000-01-01"
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    assert _field(app, "text_input", "c calibration / evaluation end date").value == datetime.now(ZoneInfo("America/Havana")).date().isoformat()
     _field(app, "text_input", "c candidates (0 < c ≤ 4; maximum 12)").set_value("1,4").run()
     _field(app, "text_input", "c final evaluation starts").set_value(str(returns.index[220].date())).run()
     _field(app, "button", "Run c calibration and final evaluation").click().run(timeout=30)
