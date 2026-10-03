@@ -131,28 +131,46 @@ class _PortfolioHomePageState extends State<PortfolioHomePage> {
           ],
         ),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedPage,
-        onDestinationSelected: (value) => setState(() => _selectedPage = value),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.pie_chart_outline),
-            selectedIcon: Icon(Icons.pie_chart),
-            label: 'Portfolio',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.show_chart),
-            label: 'Backtest',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.stacked_line_chart),
-            label: 'Diffusion OLS',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.tune),
-            label: 'Feasible Tuning',
-          ),
-        ],
+      bottomNavigationBar: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 400;
+          return NavigationBarTheme(
+            data: NavigationBarThemeData(
+              labelTextStyle: WidgetStatePropertyAll(
+                TextStyle(fontSize: compact ? 11 : 12),
+              ),
+              iconTheme: WidgetStatePropertyAll(
+                IconThemeData(size: compact ? 20 : 24),
+              ),
+            ),
+            child: NavigationBar(
+              height: compact ? 64 : 80,
+              selectedIndex: _selectedPage,
+              onDestinationSelected: (value) => setState(() => _selectedPage = value),
+              destinations: [
+                const NavigationDestination(
+                  icon: Icon(Icons.pie_chart_outline),
+                  selectedIcon: Icon(Icons.pie_chart),
+                  label: 'Portfolio',
+                ),
+                const NavigationDestination(
+                  icon: Icon(Icons.show_chart),
+                  label: 'Backtest',
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.stacked_line_chart),
+                  label: compact ? 'OLS' : 'Diffusion OLS',
+                  tooltip: 'Diffusion OLS',
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.tune),
+                  label: compact ? 'Tuning' : 'Feasible Tuning',
+                  tooltip: 'Feasible Tuning',
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
