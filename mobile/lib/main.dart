@@ -200,9 +200,11 @@ class _GoogleConnectionCard extends StatelessWidget {
               children: [
                 Icon(Icons.verified_user_outlined, size: 20),
                 SizedBox(width: 8),
-                Text(
-                  'Secure Google account',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                Expanded(
+                  child: Text(
+                    'Secure Google account',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                 ),
               ],
             ),
@@ -409,6 +411,7 @@ class _RecommendationPageState extends State<RecommendationPage> {
           children: [
             Expanded(
               child: DropdownButtonFormField<String>(
+                isExpanded: true,
                 initialValue: _holdingPeriod,
                 decoration: const InputDecoration(
                   labelText: 'Holding period',
@@ -800,6 +803,7 @@ class _BacktestPageState extends State<BacktestPage> {
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
+                isExpanded: true,
           initialValue: _holdingPeriod,
           isExpanded: true,
           decoration: const InputDecoration(
@@ -824,6 +828,7 @@ class _BacktestPageState extends State<BacktestPage> {
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
+                isExpanded: true,
           initialValue: _strategy,
           isExpanded: true,
           decoration: const InputDecoration(
@@ -861,6 +866,7 @@ class _BacktestPageState extends State<BacktestPage> {
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
+                isExpanded: true,
           initialValue: _turnoverMode,
           isExpanded: true,
           decoration: const InputDecoration(
