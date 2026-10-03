@@ -7,7 +7,7 @@ import streamlit as st
 from core.data import download_yahoo_returns, load_returns_csv
 from core.diffusion_exposure import completed_yahoo_returns
 from core.feasible_tuning import (OLD_METHOD, TradingComparison, TuningSettings, coefficients,
-                                 gaussian_experiment, historical_backtest, latest_portfolios)
+                                 epsilon_sensitivity, gaussian_experiment, historical_backtest, latest_portfolios)
 from core.short_horizon_portfolio import CANDIDATE_T, HORIZON_PRESETS, aggregate_nonoverlapping, get_horizon_preset, performance_metrics
 
 
@@ -15,10 +15,12 @@ def _remember_input(name, widget_key):
     st.session_state.setdefault("feasible_inputs", {})[name] = st.session_state[widget_key]
 
 
-def _input(container, kind, label, *, key, **kwargs):
+def _input(container, kind, label, *, key, sync=False, **kwargs):
     """Keep values outside Streamlit's widget state, which is cleared off-page."""
     values = st.session_state.setdefault("feasible_inputs", {})
     widget_key = "_feasible_widget_" + key
+    if sync:
+        st.session_state[widget_key] = kwargs["value"]
     if widget_key not in st.session_state and key in values:
         value = values[key]
         if kind == "number_input":
@@ -52,7 +54,23 @@ def _history(returns, settings, window, start, rf, cost, cap, trading):
 @st.cache_data(show_spinner=False)
 def _latest(returns, settings, history, window, rf, cap, trading):
     return latest_portfolios(returns, settings, history, window=window,
-                             rf=rf, cap=cap, trading=trading)
+                             rf=rf, cap=cap, trading=trading, return_raw=True)
+
+
+@st.cache_data(show_spinner=False)
+def _epsilon(returns, settings, candidates, window, start, evaluation_start, ppy, rf, cost, cap, trading):
+    return epsilon_sensitivity(returns, settings, candidates, window=window,
+                               calibration_start=start, evaluation_start=evaluation_start,
+                               periods_per_year=ppy, rf=rf, cost_bps=cost, cap=cap, trading=trading)
+
+
+def _label(name, practical):
+    return "Classical MV + turnover control" if practical and name == "Classical (main sample)" else name
+
+
+def _weight_table(portfolios, assets, practical):
+    return pd.DataFrame([{"Method": _label(name, practical), **dict(zip(assets, w)),
+                          "Cash": 1-w.sum()} for name, w in portfolios.items()])
 
 
 @st.cache_data(show_spinner=False)
@@ -82,6 +100,7 @@ defaults = shared if use_shared else {}
 s1, s2, s3 = st.columns(3)
 gamma = _input(s1, "number_input", "Risk aversion γ", min_value=0.01,
                         value=1.0 if experiment == "Gaussian theorem check" else float(defaults.get("gamma", 3.0)),
+                        sync=use_shared, disabled=use_shared,
                         key="feasible_gamma_" + experiment + str(use_shared))
 c = _input(s2, "number_input", "Trace c (0 < c ≤ 4)", min_value=0.01, max_value=4.0, value=4.0, key="trace_c")
 epsilon = _input(s3, "number_input", "Trace ε", min_value=0.000001, value=0.25, format="%.6f", key="trace_epsilon",
@@ -141,9 +160,11 @@ if experiment == "Gaussian theorem check":
 if use_shared:
     returns = shared["full_returns"].copy()
     period = shared["holding_period"]
-    st.caption(f"Using the Portfolio tab's saved data: {', '.join(returns.columns)}; {period}; data through {pd.Timestamp(returns.index[-1]).date()}. Settings below can be adjusted before running.")
+    st.caption(f"Using the Portfolio tab's saved data: {', '.join(returns.columns)}; {period}; data through {pd.Timestamp(returns.index[-1]).date()}. Common settings are locked to the saved recommendation; turn off the shared-data option to edit them independently.")
+    if not shared.get("replay_start"):
+        st.warning("This older Portfolio result did not save its replay date. Rerun Portfolio to publish a complete comparison snapshot. The fallback replay date is 2019-01-01.")
     if shared.get("mean_model", "Original diffusion mean") != "Original diffusion mean":
-        st.warning("The old-method comparator uses Original diffusion mean. Your saved Portfolio used a different mean model, so this row will not reproduce that saved forecast-based recommendation.")
+        st.info("The old Portfolio comparator uses your saved forecast model. The classical and direct tuning methods estimate unconditional sample means, as specified by the feasible-tuning experiment.")
 else:
     source = _input(st, "radio", "Data source", options=["Yahoo Finance", "Upload CSV"], horizontal=True, key="source")
     d1, d2, d3 = st.columns([2, 1, 1])
@@ -176,16 +197,21 @@ if returns is None:
     st.stop()
 
 cfg = get_horizon_preset(period)
+if use_shared:
+    cfg.update(shared.get("validation_config", {}))
 ppy = int(cfg["periods_per_year"])
+if use_shared:
+    st.session_state["_feasible_widget_allocation"] = "Turnover-controlled comparison with old Portfolio"
 allocation = _input(st, "radio", "Allocation", options=["Turnover-controlled comparison with old Portfolio",
                                      "Theorem weights (unconstrained)",
-                                     "Long-only with cash (empirical comparison)"], horizontal=True, key="allocation")
+                                     "Long-only with cash (empirical comparison)"], horizontal=True, key="allocation", disabled=use_shared)
 practical = allocation.startswith("Turnover-controlled")
 required = int(cfg["min_train_size"]) + int(cfg["inner_folds"])*int(cfg["validation_size"])
 minimum = max(10, returns.shape[1]+1, required if practical else 0)
 h1, h2, h3 = st.columns(3)
 window = _input(h1, "number_input", "Main estimation window", min_value=minimum,
                          value=max(minimum, int(defaults.get("lookback", cfg["lookback"]))),
+                         sync=use_shared, disabled=use_shared,
                          key=f"feasible_window_{period}_{use_shared}_{practical}",
                          help="Every method uses this same trailing block. Weekly Portfolio preset: 520 observations.")
 annual_rf = _input(h2, "number_input", "Annual risk-free return (%)", min_value=-99.0, value=0.0, key=f"riskfree_{practical}",
@@ -195,7 +221,7 @@ cost = _input(h3, "number_input", "Trading cost (bps per turnover)", min_value=0
 if practical:
     annual_rf = 0.0
 rf = (1+annual_rf/100)**(1/ppy)-1
-oos_start = _input(st, "text_input", "Backtest / strategy replay start date", value=str(defaults.get("replay_start", "2019-01-01")), key=f"replay_start_{use_shared}")
+oos_start = _input(st, "text_input", "Backtest / strategy replay start date", value=str(defaults.get("replay_start") or "2019-01-01"), key=f"replay_start_{use_shared}", sync=use_shared, disabled=use_shared)
 cap = None
 trading = None
 if practical:
@@ -203,24 +229,29 @@ if practical:
     t1, t2, t3 = st.columns(3)
     cap = _input(t1, "number_input", "Maximum weight per stock", min_value=1.0/returns.shape[1], max_value=1.0,
                           value=max(1.0/returns.shape[1], float(defaults.get("max_long_weight", 0.4))),
+                          sync=use_shared, disabled=use_shared,
                           key=f"feasible_trading_cap_{use_shared}")
     penalty = _input(t2, "number_input", "Turnover penalty (bps)", min_value=0.0, max_value=100.0,
                               value=10000*float(defaults.get("turnover_penalty", 0.0025)),
+                              sync=use_shared, disabled=use_shared,
                               key=f"feasible_penalty_{use_shared}")
     alpha = _input(t3, "number_input", "Rebalance step (%)", min_value=1.0, max_value=100.0,
                             value=100*float(defaults.get("rebalance_alpha", 0.5 if period == "1 week" else 1.0)),
+                            sync=use_shared, disabled=use_shared,
                             key=f"feasible_alpha_{period}_{use_shared}")
     with st.expander("Old method settings"):
         t4, t5, t6 = st.columns(3)
-        m = _input(t4, "number_input", "Old-method synthetic-equivalent M", min_value=0, value=int(defaults.get("m", 500)), key=f"old_m_{use_shared}")
-        beta = _input(t5, "number_input", "Constant β", min_value=0.01, value=float(defaults.get("beta", 1.0)), key=f"old_beta_{use_shared}")
-        steps = _input(t6, "number_input", "Old-method reverse SDE steps", min_value=10, value=int(defaults.get("n_steps", 100)), key=f"old_steps_{use_shared}")
+        m = _input(t4, "number_input", "Old-method synthetic-equivalent M", min_value=0, value=int(defaults.get("m", 500)), key=f"old_m_{use_shared}", sync=use_shared, disabled=use_shared)
+        beta = _input(t5, "number_input", "Constant β", min_value=0.01, value=float(defaults.get("beta", 1.0)), key=f"old_beta_{use_shared}", sync=use_shared, disabled=use_shared)
+        steps = _input(t6, "number_input", "Old-method reverse SDE steps", min_value=10, value=int(defaults.get("n_steps", 100)), key=f"old_steps_{use_shared}", sync=use_shared, disabled=use_shared)
         st.caption(f"Old method candidate T grid: {CANDIDATE_T}. Trace tuning calculates T directly.")
     trading = TradingComparison(inner_folds=int(cfg["inner_folds"]),
                                 validation_size=int(cfg["validation_size"]),
                                 min_train_size=int(cfg["min_train_size"]),
                                 turnover_penalty=penalty/10000, rebalance_alpha=alpha/100,
-                                cap=cap, m=m, beta=beta, n_steps=steps)
+                                cap=cap, m=m, beta=beta, n_steps=steps,
+                                mean_model=defaults.get("mean_model", "Original diffusion mean"))
+    st.caption(f"Old Portfolio expected-return model: {trading.mean_model}. Replay start: {oos_start}.")
 if allocation.startswith("Long-only"):
     cap = _input(st, "number_input", "Maximum weight per stock", min_value=0.01, max_value=1.0, value=0.4, key="cash_cap")
 elif not practical:
@@ -234,6 +265,40 @@ if st.button("Run feasible-tuning backtest", type="primary"):
         st.session_state["feasible_result"] = (signature, result)
     except (ValueError, RuntimeError, np.linalg.LinAlgError) as exc:
         st.error(str(exc))
+
+with st.expander("ε sensitivity: calibration and final evaluation"):
+    st.caption("Candidates are compared on the earlier calibration period using net annualized mean–variance excess. The winner is frozen for the later evaluation. This experiment does not change the main backtest's ε. Choose the dates and candidate grid before examining final results; repeated tuning on the final period makes it exploratory.")
+    candidates_text = _input(st, "text_input", "Positive ε candidates (maximum 12)", value="0.0001,0.001,0.01,0.05,0.25", key="epsilon_candidates")
+    calibration_start = _input(st, "text_input", "Calibration starts", value=oos_start, key="calibration_start")
+    eligible_dates = returns.index[window:]
+    default_final = str(pd.Timestamp(eligible_dates[int(0.8*len(eligible_dates))]).date()) if len(eligible_dates) else oos_start
+    evaluation_start = _input(st, "text_input", "Final evaluation starts", value=default_final, key="evaluation_start")
+    epsilon_signature = (signature, candidates_text, calibration_start, evaluation_start, ppy)
+    if st.button("Run ε calibration and final evaluation"):
+        try:
+            candidates = tuple(float(e.strip()) for e in candidates_text.split(",") if e.strip())
+            with st.spinner("Calibrating ε on past data, then evaluating the frozen choice..."):
+                sensitivity = _epsilon(returns, settings, candidates, window, calibration_start,
+                                       evaluation_start, ppy, rf, cost, cap, trading)
+            st.session_state["feasible_epsilon_result"] = (epsilon_signature, sensitivity)
+        except (ValueError, RuntimeError, np.linalg.LinAlgError) as exc:
+            st.error(str(exc))
+    saved_epsilon = st.session_state.get("feasible_epsilon_result")
+    if saved_epsilon is not None and saved_epsilon[0] == epsilon_signature:
+        sensitivity = saved_epsilon[1]
+        st.write(f"Frozen ε: {sensitivity['selected_epsilon']:g}. Calibration through {pd.Timestamp(sensitivity['calibration_through']).date()}.")
+        st.write("Calibration results")
+        formats = {k: "{:.3%}" for k in sensitivity["calibration"].columns if k not in ("ε", "Periods")}
+        st.dataframe(sensitivity["calibration"].style.format(formats), hide_index=True, use_container_width=True)
+        st.write("Final evaluation: frozen trace versus classical")
+        table = sensitivity["evaluation_summary"].copy()
+        table["Method"] = table["Method"].map(lambda name: _label(name, practical))
+        st.dataframe(table.style.format(formats), hide_index=True, use_container_width=True)
+        final = sensitivity["evaluation"]
+        wealth = { _label(name, practical): pd.Series(np.cumprod(1+group["Net return"].to_numpy()), index=group["Date"])
+                   for name, group in final.groupby("Method", sort=False)}
+        st.line_chart(pd.DataFrame(wealth))
+        st.caption(f"Final evaluation: {final['Date'].min().date()} to {final['Date'].max().date()}. Both strategies start from the same initial allocation at this boundary.")
 saved = st.session_state.get("feasible_result")
 if saved is None or saved[0] != signature:
     st.stop()
@@ -245,11 +310,11 @@ for method, group in result.groupby("Method", sort=False):
     net = group["Net return"].to_numpy()
     metrics = performance_metrics(net, gamma=gamma, periods_per_year=ppy)
     excess = net-rf
-    summary.append({"Method": method, "Total return": metrics["Total return"], "CAGR": metrics["CAGR"],
+    summary.append({"Method": _label(method, practical), "Total return": metrics["Total return"], "CAGR": metrics["CAGR"],
                     "Volatility": metrics["Annualized vol"], "Max drawdown": metrics["Max drawdown"],
                     "Annualized MV excess": ppy*(excess.mean()-gamma/2*np.var(excess, ddof=1)) if len(net)>1 else np.nan,
                     "Average turnover": group["Turnover"].mean()})
-    wealth[method] = pd.Series(np.cumprod(1+net), index=group["Date"])
+    wealth[_label(method, practical)] = pd.Series(np.cumprod(1+net), index=group["Date"])
 st.dataframe(pd.DataFrame(summary).style.format({k: "{:.2%}" for k in summary[0] if k != "Method"}), hide_index=True, use_container_width=True)
 st.line_chart(pd.DataFrame(wealth), use_container_width=True)
 st.caption("Wealth index starts at 1. Historical MV statistics do not estimate the theorem's population K2 directly.")
@@ -260,10 +325,26 @@ if practical:
     st.dataframe(compare.style.format({k: "{:.2%}" for k in compare.columns if k != "Method"}), hide_index=True, use_container_width=True)
     st.caption(f"Trace − old total return: {100*(table.loc['Trace tuning', 'Total return']-table.loc[OLD_METHOD, 'Total return']):+.2f} percentage points. Trace − old annualized MV excess: {100*(table.loc['Trace tuning', 'Annualized MV excess']-table.loc[OLD_METHOD, 'Annualized MV excess']):+.2f} percentage points. This is the complete historical test.")
 try:
-    latest, tuning = _latest(returns, settings, result, window, rf, cap, trading)
-    st.subheader("Next-period target weights")
+    latest, tuning, raw_targets = _latest(returns, settings, result, window, rf, cap, trading)
+    st.subheader("Raw optimal targets — before turnover control")
+    st.caption("These targets use the same weight constraints, with no turnover penalty or partial rebalance. The raw Classical row is directly comparable to Portfolio's Classical MV when the shared settings are enabled.")
+    raw_table = _weight_table(raw_targets, returns.columns, False)
+    raw_table["Method"] = raw_table["Method"].replace({"Classical (main sample)": "Classical MV (raw)"})
+    st.dataframe(raw_table.style.format({k: "{:.4%}" for k in [*returns.columns, "Cash"]}), hide_index=True, use_container_width=True)
+    st.subheader("Final trading allocations — after turnover control" if practical else "Final allocations — no turnover control in this mode")
     st.caption(f"Common estimation block: {pd.Timestamp(returns.index[-window]).date()} to {pd.Timestamp(returns.index[-1]).date()}, n={window}, γ={gamma:g}. " + (f"Turnover penalty {penalty:g} bps, rebalance step {alpha:g}%, cap {cap:.0%}." if practical else "No turnover penalty or partial-rebalance adjustment to the targets."))
-    st.dataframe(pd.DataFrame([{"Method": name, **dict(zip(returns.columns, w)), "Cash": 1-w.sum()} for name,w in latest.items()]).style.format({k: "{:.2%}" for k in [*returns.columns,"Cash"]}), hide_index=True, use_container_width=True)
+    st.dataframe(_weight_table(latest, returns.columns, practical).style.format({k: "{:.4%}" for k in [*returns.columns,"Cash"]}), hide_index=True, use_container_width=True)
+    if use_shared and "weights" in shared and "classical_weights" in shared:
+        st.subheader("Check against the saved Portfolio result")
+        audit = pd.DataFrame([
+            {"Comparison": "Raw Classical MV", "Maximum absolute difference (percentage points)": 100*np.max(np.abs(raw_targets["Classical (main sample)"]-np.asarray(shared["classical_weights"])))},
+            {"Comparison": "Final old Portfolio", "Maximum absolute difference (percentage points)": 100*np.max(np.abs(latest[OLD_METHOD]-np.asarray(shared["weights"])))},
+        ])
+        st.dataframe(audit, hide_index=True, use_container_width=True)
+        if audit.iloc[:, 1].max() <= 1e-5:
+            st.success("Raw Classical MV and final old Portfolio both match the saved Portfolio recommendation.")
+        else:
+            st.warning("The saved Portfolio comparison does not match. Rerun Portfolio and this comparison with the complete saved settings before interpreting the differences.")
     st.subheader("Latest tuning values")
     st.dataframe(tuning, hide_index=True, use_container_width=True)
     st.caption("An active a cap changes the finite-sample rule. For sufficiently large n the cap becomes inactive under the bounded rules.")

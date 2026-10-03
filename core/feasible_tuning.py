@@ -5,7 +5,7 @@ H is the centered MLE covariance; direct tuning uses exact continuous moments.
 The optional old-strategy comparator preserves its original finite-step model.
 The theorem concerns unconstrained, frictionless expected utility.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 import pandas as pd
@@ -14,6 +14,9 @@ from .diffusion_exposure import allocate_exposure
 from .short_horizon_portfolio import (CANDIDATE_T, project_long_only_capped,
                                      turnover_controlled_target)
 from .turnover_upgrade import partial_rebalance, solve_mv_turnover_aware
+from .portfolio_rules import compute_weights
+from .predictive_means import MEAN_MODELS
+from .short_horizon_portfolio import performance_metrics
 
 OLD_METHOD = "Old Portfolio (Best-T + turnover control)"
 
@@ -31,8 +34,11 @@ class TradingComparison:
     beta: float = 1.0
     n_steps: int = 100
     candidate_t: tuple = tuple(CANDIDATE_T)
+    mean_model: str = "Original diffusion mean"
 
     def validate(self, n, assets):
+        if self.mean_model not in MEAN_MODELS:
+            raise ValueError("Unknown old Portfolio expected-return model.")
         if self.inner_folds < 2 or self.validation_size < 2 or self.min_train_size < 2:
             raise ValueError("Old-method validation requires at least two folds and observations per block.")
         if n < self.min_train_size + self.inner_folds * self.validation_size:
@@ -106,11 +112,13 @@ def ratio_b(u, h, settings):
     return settings.b_max if q <= 0 else float(np.clip(a / q, settings.b_min, settings.b_max))
 
 
-def fit_portfolios(sample, settings, *, pilot=None, cap=None, trading=None, previous=None):
+def fit_portfolios(sample, settings, *, pilot=None, cap=None, trading=None, previous=None,
+                   return_raw=False, methods=None):
     settings.validate()
     u, h = moments(sample)
     n = len(sample)
     previous = {} if previous is None else previous
+    raw_portfolios = {}
     if trading is not None:
         trading.validate(n, len(u))
     choices = {
@@ -126,6 +134,10 @@ def fit_portfolios(sample, settings, *, pilot=None, cap=None, trading=None, prev
 
     def weights(mean, covariance, name):
         if trading is not None:
+            if return_raw:
+                raw_portfolios[name] = compute_weights(
+                    "Mean-Variance", mean, covariance, gamma=settings.gamma,
+                    constraint_mode="Long-only", max_long_weight=trading.cap)
             prev = previous.get(name, np.full(len(u), 1/len(u)))
             raw = solve_mv_turnover_aware(mean, covariance, prev,
                                          trading.turnover_penalty, gamma=settings.gamma,
@@ -133,12 +145,17 @@ def fit_portfolios(sample, settings, *, pilot=None, cap=None, trading=None, prev
             final = partial_rebalance(raw, prev, trading.rebalance_alpha)
             return project_long_only_capped(final, trading.cap)
         if cap is None:
-            return np.linalg.solve(covariance, mean) / settings.gamma
-        return allocate_exposure(mean, covariance, gamma=settings.gamma, cap=cap)
+            w = np.linalg.solve(covariance, mean) / settings.gamma
+        else:
+            w = allocate_exposure(mean, covariance, gamma=settings.gamma, cap=cap)
+        raw_portfolios[name] = w.copy()
+        return w
 
     portfolios = {"Classical (main sample)": weights(u, h, "Classical (main sample)")}
     diagnostics = []
     for name, b in choices.items():
+        if methods is not None and name not in methods:
+            continue
         a = min(settings.a_max, b / n)
         mean, covariance = endpoint_moments(u, h, a)
         portfolios[name] = weights(mean, covariance, name)
@@ -152,19 +169,25 @@ def fit_portfolios(sample, settings, *, pilot=None, cap=None, trading=None, prev
     if pilot is not None:
         full_u, full_h = moments(np.concatenate([pilot, sample]))
         portfolios["Classical (main + pilot)"] = weights(full_u, full_h, "Classical (main + pilot)")
-    if trading is not None:
+    if trading is not None and (methods is None or OLD_METHOD in methods):
         old = turnover_controlled_target(
             sample, previous.get(OLD_METHOD, np.full(len(u), 1/len(u))),
             trading.validation_config(n), gamma=settings.gamma, m=trading.m,
             beta=trading.beta, n_steps=trading.n_steps,
             candidate_t=list(trading.candidate_t), turnover_penalty=trading.turnover_penalty,
             rebalance_alpha=trading.rebalance_alpha, max_long_weight=trading.cap,
-            mean_model="Original diffusion mean",
+            mean_model=trading.mean_model,
         )
         portfolios[OLD_METHOD] = old["weights"]
+        if return_raw:
+            raw_portfolios[OLD_METHOD] = compute_weights(
+                "Mean-Variance", old["mu"], old["sigma"], gamma=settings.gamma,
+                constraint_mode="Long-only", max_long_weight=trading.cap)
         diagnostics.append({"Method": OLD_METHOD, "b": np.nan, "a": np.nan,
                             "Effective b = n a": np.nan, "a cap active": False,
                             "T": old["T"], "Horizon rule": "Nested candidate grid"})
+    if return_raw:
+        return portfolios, pd.DataFrame(diagnostics), raw_portfolios
     return portfolios, pd.DataFrame(diagnostics)
 
 
@@ -230,7 +253,7 @@ def gaussian_experiment(mu, sigma, settings, *, n=500, repetitions=1000, seed=42
 
 def historical_backtest(returns, settings, *, window=120, pilot_size=0,
                         oos_start="2019-01-01", rf=0.0, cost_bps=0.0, cap=None,
-                        trading=None):
+                        trading=None, methods=None):
     if window <= returns.shape[1] or (pilot_size and pilot_size <= returns.shape[1]):
         raise ValueError("Main and pilot windows must exceed the asset count.")
     if not 0 <= cost_bps < 10000 or rf <= -1 or not np.isfinite(rf):
@@ -251,6 +274,7 @@ def historical_backtest(returns, settings, *, window=120, pilot_size=0,
         portfolios, diagnostics = fit_portfolios(
             sample, settings, pilot=pilot, cap=cap, trading=trading,
             previous={name: w[:-1] for name, w in previous.items()},
+            methods=methods,
         )
         diag = diagnostics.set_index("Method")
         for method, w in portfolios.items():
@@ -276,7 +300,8 @@ def historical_backtest(returns, settings, *, window=120, pilot_size=0,
     return pd.DataFrame(rows)
 
 
-def latest_portfolios(returns, settings, history, *, window, rf=0.0, cap=None, trading=None):
+def latest_portfolios(returns, settings, history, *, window, rf=0.0, cap=None, trading=None,
+                      return_raw=False):
     """Next target from each method's own last holdings, with no extra replay."""
     if len(returns) < window:
         raise ValueError("Not enough observations for the common estimation window.")
@@ -289,4 +314,54 @@ def latest_portfolios(returns, settings, history, *, window, rf=0.0, cap=None, t
             w = np.array([last[f"Weight {asset}"] for asset in returns.columns])
             previous[method] = w * (1 + returns.iloc[-1].to_numpy()) / (1 + last["Gross return"])
     return fit_portfolios(returns.iloc[-window:].to_numpy()-rf, settings,
-                          cap=cap, trading=trading, previous=previous)
+                          cap=cap, trading=trading, previous=previous, return_raw=return_raw)
+
+
+def epsilon_sensitivity(returns, settings, epsilons, *, window, calibration_start,
+                        evaluation_start, periods_per_year, rf=0.0, cost_bps=0.0,
+                        cap=None, trading=None):
+    """Choose epsilon on past calibration only, then freeze it for a held-out replay.
+
+    No old nested-T calculation is needed for this trace-versus-classical experiment.
+    The final evaluation starts both strategies from the same initial holdings.
+    """
+    grid = tuple(dict.fromkeys(float(e) for e in epsilons))
+    if not grid or len(grid) > 12 or not np.isfinite(grid).all() or min(grid) <= 0:
+        raise ValueError("Enter 1–12 finite, positive epsilon candidates.")
+    cutoff = pd.Timestamp(evaluation_start)
+    if pd.Timestamp(calibration_start) >= cutoff:
+        raise ValueError("Calibration must start before the final evaluation.")
+    calibration_data = returns.loc[returns.index < cutoff]
+    methods = ("Classical (main sample)", "Trace tuning")
+
+    def summarize(group):
+        net = group["Net return"].to_numpy()
+        if len(net) < 2:
+            raise ValueError("Both calibration and final evaluation need at least two evaluated periods.")
+        metrics = performance_metrics(net, gamma=settings.gamma, periods_per_year=periods_per_year)
+        excess = net-rf
+        return {"Periods": len(net), "Total return": metrics["Total return"],
+                "CAGR": metrics["CAGR"], "Volatility": metrics["Annualized vol"],
+                "Max drawdown": metrics["Max drawdown"],
+                "Annualized MV excess": periods_per_year*(excess.mean()-settings.gamma/2*np.var(excess, ddof=1)),
+                "Average turnover": group["Turnover"].mean()}
+
+    rows = []
+    for epsilon in grid:
+        candidate = replace(settings, epsilon=epsilon)
+        history = historical_backtest(calibration_data, candidate, window=window,
+                                      oos_start=calibration_start, rf=rf, cost_bps=cost_bps,
+                                      cap=cap, trading=trading, methods=methods)
+        trace = history[history["Method"] == "Trace tuning"]
+        rows.append({"ε": epsilon, **summarize(trace)})
+    calibration = pd.DataFrame(rows)
+    selected = float(calibration.loc[calibration["Annualized MV excess"].idxmax(), "ε"])
+    frozen = replace(settings, epsilon=selected)
+    evaluation = historical_backtest(returns, frozen, window=window,
+                                     oos_start=evaluation_start, rf=rf, cost_bps=cost_bps,
+                                     cap=cap, trading=trading, methods=methods)
+    summary = pd.DataFrame([{"Method": method, **summarize(group)}
+                            for method, group in evaluation.groupby("Method", sort=False)])
+    return dict(calibration=calibration, selected_epsilon=selected,
+                calibration_through=calibration_data.index[-1],
+                evaluation_summary=summary, evaluation=evaluation)

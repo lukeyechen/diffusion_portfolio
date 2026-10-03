@@ -6,6 +6,8 @@ import pandas as pd
 from core.feasible_tuning import (OLD_METHOD, TradingComparison, TuningSettings,
                                  coefficients, endpoint_moments, fit_portfolios,
                                  historical_backtest, latest_portfolios, moments)
+from core.feasible_tuning import epsilon_sensitivity
+from core.portfolio_rules import compute_weights
 from core.short_horizon_portfolio import replay_latest_recommendation
 
 
@@ -123,6 +125,66 @@ class FeasibleTuningTests(unittest.TestCase):
             fit_portfolios(self.sample, self.settings,
                            trading=TradingComparison(inner_folds=2, validation_size=5,
                                                       min_train_size=20, cap=0.4))
+
+    def test_raw_classical_matches_portfolio_and_controls_are_separate(self):
+        trading = TradingComparison(inner_folds=2, validation_size=5, min_train_size=20,
+                                    cap=0.6, candidate_t=(0.0,), m=10, n_steps=10)
+        previous = {"Classical (main sample)": np.array([0.6, 0.4])}
+        final, _, raw = fit_portfolios(self.sample, self.settings, trading=trading,
+                                       previous=previous, return_raw=True)
+        u, h = moments(self.sample)
+        expected = compute_weights("Mean-Variance", u, h, gamma=self.settings.gamma,
+                                   constraint_mode="Long-only", max_long_weight=0.6)
+        np.testing.assert_allclose(raw["Classical (main sample)"], expected, atol=1e-10)
+        pure_trading = TradingComparison(inner_folds=2, validation_size=5, min_train_size=20,
+                                         cap=0.6, candidate_t=(0.0,), m=10, n_steps=10,
+                                         turnover_penalty=0, rebalance_alpha=1)
+        pure, _, pure_raw = fit_portfolios(self.sample, self.settings, trading=pure_trading,
+                                           previous=previous, return_raw=True)
+        for name in pure:
+            np.testing.assert_allclose(pure[name], pure_raw[name], atol=1e-8)
+            np.testing.assert_allclose(raw[name], pure_raw[name], atol=1e-8)
+
+    def test_saved_forecast_and_nondefault_replay_start_match(self):
+        rng = np.random.default_rng(7)
+        frame = pd.DataFrame(rng.normal(.002, .02, (125, 2)),
+                              index=pd.date_range("2020-01-03", periods=125, freq="W-FRI"),
+                              columns=["A", "B"])
+        trading = TradingComparison(inner_folds=2, validation_size=5, min_train_size=20,
+                                    cap=.6, candidate_t=(0.0, .5), m=10, n_steps=10,
+                                    mean_model="OLS forecast")
+        start = str(frame.index[122].date())
+        history = historical_backtest(frame, self.settings, window=120,
+                                      oos_start=start, trading=trading)
+        final, _ = latest_portfolios(frame, self.settings, history, window=120, trading=trading)
+        expected = replay_latest_recommendation(
+            frame, trading.validation_config(120), gamma=self.settings.gamma,
+            m=trading.m, beta=trading.beta, n_steps=trading.n_steps,
+            candidate_t=list(trading.candidate_t), turnover_penalty=trading.turnover_penalty,
+            rebalance_alpha=trading.rebalance_alpha, max_long_weight=trading.cap,
+            mean_model=trading.mean_model, replay_start=start)
+        np.testing.assert_allclose(final[OLD_METHOD], expected["weights"], atol=1e-8)
+
+    def test_epsilon_selection_uses_only_calibration(self):
+        frame = pd.DataFrame(self.sample, index=pd.date_range("2020-01-03", periods=40, freq="W-FRI"), columns=["A", "B"])
+        options = dict(window=15, calibration_start="2020-01-01",
+                       evaluation_start=str(frame.index[30].date()), periods_per_year=52,
+                       cap=.4, cost_bps=25)
+        result = epsilon_sensitivity(frame, self.settings, [.001, .01, .25], **options)
+        changed = frame.copy()
+        changed.iloc[30:] = [.2, -.1]
+        other = epsilon_sensitivity(changed, self.settings, [.001, .01, .25], **options)
+        pd.testing.assert_frame_equal(result["calibration"], other["calibration"])
+        self.assertEqual(result["selected_epsilon"], other["selected_epsilon"])
+        self.assertLess(result["calibration_through"], frame.index[30])
+        self.assertEqual(result["evaluation"]["Date"].min(), frame.index[30])
+        np.testing.assert_allclose(result["evaluation"].iloc[:2][["Weight A", "Weight B"]],
+                                   other["evaluation"].iloc[:2][["Weight A", "Weight B"]])
+        for method, group in result["evaluation"].groupby("Method"):
+            self.assertAlmostEqual(group.iloc[0]["Turnover"], group.iloc[0][["Weight A", "Weight B"]].sum())
+        for invalid in ([0], [-1], [np.nan], list(range(1, 14))):
+            with self.assertRaises(ValueError):
+                epsilon_sensitivity(frame, self.settings, invalid, **options)
 
 
 if __name__ == "__main__":
