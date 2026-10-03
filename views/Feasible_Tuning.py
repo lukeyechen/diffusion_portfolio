@@ -16,6 +16,7 @@ import core.feasible_tuning as _feasible_module
 if (not hasattr(_feasible_module, "trace_calibration")
         or not hasattr(_feasible_module, "epsilon_sensitivity")
         or getattr(_feasible_module, "TRACE_CALIBRATION_VERSION", None) != 2
+        or getattr(_feasible_module, "COMPARISON_VERSION", None) != 3
         or getattr(_feasible_module, "CLASSICAL_MV_RULE", None) != "allocation-aware-classical-v2"):
     importlib.reload(_feasible_module)
 from core.feasible_tuning import (OLD_METHOD, TradingComparison, TuningSettings, coefficients,
@@ -65,21 +66,21 @@ def _download(tickers, start, period):
 
 @st.cache_data(show_spinner=False)
 def _history(returns, settings, window, start, rf, cost, cap, trading):
-    # Allocation-aware Classical MV v2: invalidate pre-fix cached results.
+    # Comparison v3: Fixed b and Trace tuning only; allocation-aware Classical MV: invalidate pre-fix cached results.
     return historical_backtest(returns, settings, window=window,
                                oos_start=start, rf=rf, cost_bps=cost, cap=cap, trading=trading)
 
 
 @st.cache_data(show_spinner=False)
 def _latest(returns, settings, history, window, rf, cap, trading):
-    # Allocation-aware Classical MV v2.
+    # Comparison v3: Fixed b and Trace tuning only; allocation-aware Classical MV.
     return latest_portfolios(returns, settings, history, window=window,
                              rf=rf, cap=cap, trading=trading, return_raw=True)
 
 
 @st.cache_data(show_spinner=False)
 def _epsilon(returns, settings, candidates, window, start, evaluation_start, ppy, rf, cost, cap, trading, end_date):
-    # Allocation-aware Classical MV v2.
+    # Comparison v3: Fixed b and Trace tuning only; allocation-aware Classical MV.
     return epsilon_sensitivity(returns, settings, candidates, window=window,
                                calibration_start=start, evaluation_start=evaluation_start,
                                periods_per_year=ppy, rf=rf, cost_bps=cost, cap=cap, trading=trading, end_date=end_date)
@@ -103,11 +104,12 @@ def _weight_table(portfolios, assets, practical):
 
 @st.cache_data(show_spinner=False)
 def _gaussian(mu, sigma, settings, n, repetitions, seed):
+    # Comparison v3 excludes Same-sample ratio.
     return gaussian_experiment(mu, sigma, settings, n=n, repetitions=repetitions, seed=seed)
 
 
 st.title("Feasible Tuning")
-st.caption("Trace tuning, one same-sample ratio comparator, and a comparison with the old Portfolio method.")
+st.caption("Fixed b and Trace tuning, compared with Classical MV and the old Portfolio method.")
 experiment = _input(st, "radio", "Experiment", options=["Historical backtest", "Gaussian theorem check"], horizontal=True, key="experiment")
 st.info(
     "The positive trace coefficient applies to asymptotic expected utility under the paper's Gaussian, "
@@ -134,14 +136,12 @@ gamma = _input(s1, "number_input", "Risk aversion γ", min_value=0.01,
 c = _input(s2, "number_input", "Trace c (0 < c ≤ 4)", min_value=0.000001, max_value=4.0, value=4.0, step=0.001, format="%.6f", key="trace_c")
 epsilon = _input(s3, "number_input", "Trace ε", min_value=0.000001, value=0.25, format="%.6f", key="trace_epsilon",
                           help="Positive variance-scale constant chosen before using the main sample.")
-s4, s5, s6, s7 = st.columns(4)
+s4, s5 = st.columns(2)
 a_max = _input(s4, "number_input", "Maximum a", min_value=0.01, max_value=0.999, value=0.95, key="a_max")
 fixed_b = c
 s5.caption(f"Fixed b comparator follows Trace c: b = {fixed_b:.6g}")
-b_min = _input(s6, "number_input", "Ratio b lower bound", min_value=0.001, value=1.0, key="b_min")
-b_max = _input(s7, "number_input", "Ratio b upper bound", min_value=0.002, value=20.0, key="b_max")
 settings = TuningSettings(gamma=gamma, c=c, epsilon=epsilon, a_max=a_max,
-                          fixed_b=fixed_b, b_min=b_min, b_max=b_max)
+                          fixed_b=fixed_b)
 try:
     settings.validate()
 except ValueError as exc:
@@ -154,11 +154,11 @@ with st.expander("Implemented rules and theorem scope"):
     st.latex(r"K_{2,\rm tr}=\gamma^{-1}\left[cA/D_\varepsilon+(2c-c^2/2)Q/D_\varepsilon^2\right]")
     st.write("Here A = (N+2)‖μ‖² + tr(Σ), Q = μᵀΣμ, and Dε = ε + tr(Σ). For c=4, the Q term cancels and the coefficient is positive, including μ=0.")
     st.write("The direct tuning rules use centered MLE covariance and exact continuous-time endpoint moments, without Euler steps or a real/synthetic mixture. The old comparator retains its original finite-step moments and mixture.")
-    st.write("The retained ratio method is the bounded same-sample A/Q plug-in. Its derivative interaction Ξg means consistency alone does not guarantee a gain. All displayed methods use the same main estimation block; no pilot block is held out.")
-    st.write("Choose c, ε and bounds before examining the main sample. The theorem is not a guarantee for parameters selected retrospectively to maximize this backtest. Returns are in decimal units and the identity reference makes coordinate units consequential.")
+    st.write("All displayed methods use the same main estimation block.")
+    st.write("Choose c and ε before examining the main sample. The theorem is not a guarantee for parameters selected retrospectively to maximize this backtest. Returns are in decimal units and the identity reference makes coordinate units consequential.")
 
 if experiment == "Gaussian theorem check":
-    st.caption("Known population moments let us evaluate true utility, rather than treating in-sample fitted utility as truth. Defaults reproduce the one-asset negative-ratio example in your extension.")
+    st.caption("Known population moments let us evaluate true utility, rather than treating in-sample fitted utility as truth. Compare Fixed b and Trace tuning with the classical estimator.")
     g1, g2, g3, g4 = st.columns(4)
     assets = _input(g1, "number_input", "Number of assets", min_value=1, max_value=10, value=1, key="gaussian_assets")
     mu_scalar = _input(g2, "number_input", "Population mean per asset", value=0.5, format="%.4f", key="gaussian_mean")
@@ -171,13 +171,13 @@ if experiment == "Gaussian theorem check":
     mu = np.full(assets, mu_scalar)
     sigma = variance * ((1-rho)*np.eye(assets) + rho*np.ones((assets, assets)))
     population = coefficients(mu, sigma, settings)
-    st.dataframe(population[population["Method"] != "Pilot ratio"], hide_index=True, use_container_width=True)
+    st.dataframe(population[~population["Method"].isin(["Pilot ratio", "Same-sample ratio"])], hide_index=True, use_container_width=True)
     g5, g6, g7 = st.columns(3)
     n = _input(g5, "number_input", "Main sample size n", min_value=max(10, assets+5), max_value=5000, value=500, key=f"gaussian_n_{assets}")
     repetitions = _input(g6, "number_input", "Monte Carlo repetitions", min_value=100, max_value=10000, value=1000, key="gaussian_repetitions")
     seed = _input(g7, "number_input", "Random seed", min_value=0, value=42, key="gaussian_seed")
     st.caption("Each repetition uses one main sample of size n. Reported Monte Carlo standard errors measure simulation uncertainty; n² mean gain approaches K2 only asymptotically. The old constrained trading strategy is compared in the historical mode.")
-    gaussian_signature = (tuple(mu), tuple(map(tuple, sigma)), settings, n, repetitions, seed)
+    gaussian_signature = (3, tuple(mu), tuple(map(tuple, sigma)), settings, n, repetitions, seed)
     if st.button("Run Gaussian check", type="primary"):
         with st.spinner("Evaluating true Gaussian utility on paired samples..."):
             result = _gaussian(mu, sigma, settings, n, repetitions, seed)
@@ -288,7 +288,7 @@ if allocation.startswith("Long-only"):
 elif not practical:
     st.caption("Unconstrained weights can be negative or sum above 100%; cash can represent borrowing. They are not normalized to a fully invested long-only portfolio.")
 
-signature = (_feasible_module.CLASSICAL_MV_RULE, returns.to_json(), settings, window, oos_start, rf, cost, cap, trading)
+signature = (_feasible_module.COMPARISON_VERSION, _feasible_module.CLASSICAL_MV_RULE, returns.to_json(), settings, window, oos_start, rf, cost, cap, trading)
 history_default = str(pd.Timestamp(returns.index[0]).date()) if use_shared else start
 today_default = datetime.now(ZoneInfo("America/Havana")).date().isoformat()
 
@@ -329,6 +329,9 @@ with st.expander("Trace calibration: c, ε, or both"):
         grid_table.insert(2, "Selected ε", np.where(grid_table["Method"] == "Trace tuning", grid_result["selected_epsilon"], np.nan))
         grid_formats.update({"Selected c": "{:.6g}", "Selected ε": "{:.6g}"})
         grid_table["Method"] = grid_table["Method"].map(lambda name: _label(name, practical))
+        for column in ("Selected c", "Selected ε"):
+            grid_table[column] = grid_table[column].map(lambda value: "—" if pd.isna(value) else f"{value:.6g}")
+        grid_formats = {key: value for key, value in grid_formats.items() if key not in ("Selected c", "Selected ε")}
         st.dataframe(grid_table.style.format(grid_formats, na_rep="—"), hide_index=True, use_container_width=True)
         grid_history = grid_result["evaluation"]
         st.line_chart(pd.DataFrame({_label(name, practical): pd.Series(np.cumprod(1+group["Net return"].to_numpy()), index=group["Date"]) for name, group in grid_history.groupby("Method", sort=False)}))
@@ -392,13 +395,18 @@ try:
     st.subheader("Latest tuning values")
     tuning_display = tuning.copy()
     trace_rows = tuning_display["Method"] == "Trace tuning"
-    tuning_display.insert(1, "Trace c", np.where(trace_rows, settings.c, np.nan))
+    tuning_display.insert(1, "Trace c", np.where(tuning_display["Method"].isin(["Fixed b", "Trace tuning"]), settings.c, np.nan))
     tuning_display.insert(2, "Trace ε", np.where(trace_rows, settings.epsilon, np.nan))
     tuning_display = tuning_display.rename(columns={"b": "b (noise level)"})
     st.caption(f"Trace tuning uses c = {settings.c:.6g}, ε = {settings.epsilon:.6g}, and b = c / (ε + tr(Σ̂)). Fixed b is linked to your Trace c input and uses b = {settings.fixed_b:.6g}.")
-    st.dataframe(tuning_display.style.format({"Trace c": "{:.6g}", "Trace ε": "{:.6g}",
-                                            "b (noise level)": "{:.6g}"}, na_rep="—"),
-                 hide_index=True, use_container_width=True)
+    # Explicit text survives Streamlit serialization; Styler na_rep alone does not.
+    for column in tuning_display.columns:
+        if column in ("Trace c", "Trace ε", "b (noise level)") or tuning_display[column].isna().any():
+            tuning_display[column] = tuning_display[column].map(
+                lambda value: "—" if pd.isna(value) else
+                (f"{value:.6g}" if isinstance(value, (float, np.floating)) else str(value)))
+    st.dataframe(tuning_display, hide_index=True, use_container_width=True)
+    st.caption("— means the parameter is not used by that method. Fixed b uses c directly; ε applies only to Trace tuning.")
     st.caption("An active a cap changes the finite-sample rule. For sufficiently large n the cap becomes inactive under the bounded rules.")
 except (ValueError, RuntimeError, np.linalg.LinAlgError) as exc:
     st.error(str(exc))

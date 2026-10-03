@@ -43,7 +43,7 @@ def test_feasible_tuning_page_and_gaussian_example():
     assert not app.exception
     app.radio[0].set_value("Gaussian theorem check").run()
     assert not app.exception
-    assert app.dataframe[0].value.set_index("Method").loc["Same-sample ratio", "K2"] == -0.375
+    assert "Same-sample ratio" not in app.dataframe[0].value["Method"].values
     assert "Pilot ratio" not in app.dataframe[0].value["Method"].values
     app.button[0].click().run(timeout=30)
     assert not app.exception
@@ -290,9 +290,9 @@ def test_c_calibration_and_joint_results_survive_navigation():
     final = app.dataframe[1].value.set_index("Method")
     calibration = app.dataframe[0].value
     winner = calibration.loc[calibration["Annualized MV excess"].idxmax()]
-    assert final.loc["Trace tuning", "Selected c"] == winner["c"]
-    assert final.loc["Trace tuning", "Selected ε"] == winner["ε"]
-    assert pd.isna(final.loc["Classical MV", "Selected c"])
+    assert float(final.loc["Trace tuning", "Selected c"]) == winner["c"]
+    assert float(final.loc["Trace tuning", "Selected ε"]) == winner["ε"]
+    assert final.loc["Classical MV", "Selected c"] == "—"
     assert any("Selected calibration settings used below" in item.value for item in app.success)
     _field(app, "text_input", "c candidates (0 < c ≤ 4; maximum 12)").set_value("5").run()
     _field(app, "button", "Run c calibration and final evaluation").click().run(timeout=30)
@@ -341,7 +341,10 @@ def test_trace_c_precision_and_latest_noise_labels():
     _field(app, "button", "Run feasible-tuning backtest").click().run(timeout=30)
     assert not app.exception and not app.error
     tuning = next(item.value for item in app.dataframe if "Trace c" in item.value.columns).set_index("Method")
-    assert tuning.loc["Trace tuning", "Trace c"] == .025
-    assert tuning.loc["Fixed b", "b (noise level)"] == .025
-    assert pd.isna(tuning.loc["Fixed b", "Trace c"])
+    assert float(tuning.loc["Trace tuning", "Trace c"]) == .025
+    assert float(tuning.loc["Fixed b", "b (noise level)"]) == .025
+    assert float(tuning.loc["Fixed b", "Trace c"]) == .025
+    assert tuning.loc["Fixed b", "Trace ε"] == "—"
+    assert not tuning.isna().any().any()
+    assert "Same-sample ratio" not in tuning.index
     assert tuning.loc["Trace tuning", "b (noise level)"] != 7
