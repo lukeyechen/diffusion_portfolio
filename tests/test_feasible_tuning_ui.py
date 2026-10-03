@@ -226,3 +226,21 @@ def test_epsilon_experiment_survives_navigation_and_leaves_main_setting_unchange
     assert len(app.dataframe) == 2
     for before, after in zip(original, app.dataframe):
         pd.testing.assert_frame_equal(before, after.value)
+
+
+def test_live_upgrade_refreshes_stale_feasible_module_once():
+    import core.feasible_tuning as module
+    # Simulate the pre-upgrade module retained by the manual Streamlit router.
+    original = module.epsilon_sensitivity
+    del module.epsilon_sensitivity
+    try:
+        app = AppTest.from_file(PAGE).run()
+        assert not app.exception
+        assert callable(module.epsilon_sensitivity)
+        refreshed_class = module.TuningSettings
+        app.run()
+        assert not app.exception
+        assert module.TuningSettings is refreshed_class
+    finally:
+        if not hasattr(module, "epsilon_sensitivity"):
+            module.epsilon_sensitivity = original

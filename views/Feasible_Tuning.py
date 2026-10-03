@@ -3,9 +3,16 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import streamlit as st
+import importlib
 
 from core.data import download_yahoo_returns, load_returns_csv
 from core.diffusion_exposure import completed_yahoo_returns
+# The manual exec-based router can retain the previous module during a live
+# deployment. Refresh it only when the new export is missing, preserving normal
+# rerun class identities and saved result signatures.
+import core.feasible_tuning as _feasible_module
+if not hasattr(_feasible_module, "epsilon_sensitivity"):
+    importlib.reload(_feasible_module)
 from core.feasible_tuning import (OLD_METHOD, TradingComparison, TuningSettings, coefficients,
                                  epsilon_sensitivity, gaussian_experiment, historical_backtest, latest_portfolios)
 from core.short_horizon_portfolio import CANDIDATE_T, HORIZON_PRESETS, aggregate_nonoverlapping, get_horizon_preset, performance_metrics
