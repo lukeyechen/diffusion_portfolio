@@ -22,6 +22,7 @@ TRACE_CALIBRATION_VERSION = 2
 
 OLD_METHOD = "Old Portfolio (Best-T + turnover control)"
 CLASSICAL_MV_RULE = "allocation-aware-classical-v2"
+COMPARISON_VERSION = 3
 
 
 @dataclass(frozen=True)
@@ -126,7 +127,6 @@ def fit_portfolios(sample, settings, *, pilot=None, cap=None, trading=None, prev
         trading.validate(n, len(u))
     choices = {
         "Fixed b": settings.fixed_b,
-        "Same-sample ratio": ratio_b(u, h, settings),
         "Trace tuning": settings.c / (settings.epsilon + float(np.trace(h))),
     }
     if pilot is not None:
