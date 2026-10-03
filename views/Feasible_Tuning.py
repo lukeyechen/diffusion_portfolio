@@ -82,7 +82,7 @@ with st.expander("Implemented rules and theorem scope"):
     st.latex(r"D=(1-a)I+aH,\quad m=(1-a)D^{-1}u,\quad S=H-a^2H^3D^{-2},\quad w=S^{-1}m/\gamma")
     st.latex(r"K_{2,\rm tr}=\gamma^{-1}\left[cA/D_\varepsilon+(2c-c^2/2)Q/D_\varepsilon^2\right]")
     st.write("Here A = (N+2)‖μ‖² + tr(Σ), Q = μᵀΣμ, and Dε = ε + tr(Σ). For c=4, the Q term cancels and the coefficient is positive, including μ=0.")
-    st.write("The engine uses centered MLE covariance and exact proxy endpoint moments directly (the infinite-synthetic-sample limit). No Euler steps or real/synthetic mixture are applied.")
+    st.write("The direct tuning rules use centered MLE covariance and exact continuous-time endpoint moments, without Euler steps or a real/synthetic mixture. The old comparator retains its original finite-step moments and mixture.")
     st.write("The retained ratio method is the bounded same-sample A/Q plug-in. Its derivative interaction Ξg means consistency alone does not guarantee a gain. All displayed methods use the same main estimation block; no pilot block is held out.")
     st.write("Choose c, ε and bounds before examining the main sample. The theorem is not a guarantee for parameters selected retrospectively to maximize this backtest. Returns are in decimal units and the identity reference makes coordinate units consequential.")
 
@@ -199,7 +199,7 @@ elif not practical:
 signature = (returns.to_json(), settings, window, oos_start, rf, cost, cap, trading)
 if st.button("Run feasible-tuning backtest", type="primary"):
     try:
-        with st.spinner("Replaying the common comparison; the old method runs nested T validation each period..."):
+        with st.spinner("Replaying the common comparison; the old method runs nested T validation each period..." if practical else "Comparing direct allocations through history..."):
             result = _history(returns, settings, window, oos_start, rf, cost, cap, trading)
         st.session_state["feasible_result"] = (signature, result)
     except (ValueError, RuntimeError, np.linalg.LinAlgError) as exc:
