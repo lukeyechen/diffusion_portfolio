@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
+from dataclasses import replace
 import os
 import re
 from typing import Annotated, Any, Literal
@@ -14,6 +16,7 @@ from google.oauth2 import id_token as google_id_token
 from pydantic import BaseModel, Field, field_validator
 
 from config import DEFAULT_BETA, DEFAULT_GAMMA, DEFAULT_M, DEFAULT_MAX_LONG_WEIGHT
+from core.feasible_tuning import TuningSettings, TradingComparison, trace_calibration, historical_backtest, latest_portfolios
 from core.data import download_yahoo_returns
 from core.diffusion_exposure import (
     backtest_exposure,
@@ -717,4 +720,87 @@ def backtest_horizon_comparison(
                 })
         return {"rows": rows, "dates": dates}
     except ValueError as exc:
+        raise _request_error(exc) from exc
+
+
+def _trace_today() -> date:
+    return datetime.now(ZoneInfo("America/Havana")).date()
+
+
+class FeasibleTraceRequest(PortfolioSettings):
+    oos_start: date = Field(default_factory=lambda: (pd.Timestamp(_trace_today()) - pd.DateOffset(months=6)).date())
+    end_date: date = Field(default_factory=_trace_today)
+    annual_risk_free_percent: float = Field(default=0.0, gt=-100.0, le=100.0)
+    transaction_cost_bps: float = Field(default=25.0, ge=0.0, le=1000.0)
+    cs: list[float] = Field(default_factory=lambda: [.25, .5, 1, 2, 4], min_length=1, max_length=12)
+    epsilons: list[float] = Field(default_factory=lambda: [.001, .01, .05, .1, .25], min_length=1, max_length=12)
+
+
+@app.post("/v1/feasible-tuning")
+def feasible_trace(
+    request: FeasibleTraceRequest,
+    _user: dict[str, Any] = Depends(require_google_user),
+) -> dict[str, Any]:
+    """Shared automatic Trace calibration for the iPhone PWA and Android."""
+    try:
+        cfg = get_horizon_preset(request.holding_period)
+        interval = "1wk" if cfg["source"] == "weekly" else "1mo"
+        base = download_yahoo_returns(request.tickers, start=request.start_date.isoformat(), end=None, interval=interval)
+        missing = set(request.tickers) - set(base.columns)
+        if missing:
+            raise ValueError("Missing Yahoo history: " + ", ".join(sorted(missing)))
+        base = completed_yahoo_returns(base.loc[:, request.tickers], source=cfg["source"])
+        returns = aggregate_nonoverlapping(base, int(cfg["block_size"]))
+        returns = returns.loc[returns.index <= pd.Timestamp(request.end_date)]
+        window = request.lookback or int(cfg["lookback"])
+        ppy = int(cfg["periods_per_year"])
+        rf = (1 + request.annual_risk_free_percent / 100) ** (1 / ppy) - 1
+        trading = TradingComparison(
+            inner_folds=int(cfg["inner_folds"]), validation_size=int(cfg["validation_size"]),
+            min_train_size=int(cfg["min_train_size"]), cap=request.max_long_weight,
+            turnover_penalty=request.turnover_penalty_bps / 10000,
+            rebalance_alpha=_rebalance_alpha(request), m=request.synthetic_equivalent_m,
+            beta=request.beta, n_steps=request.reverse_steps,
+        )
+        settings = TuningSettings(gamma=request.gamma, a_max=.95)
+        calibrated = trace_calibration(
+            returns, settings, request.epsilons, cs=request.cs, window=window,
+            calibration_start=request.start_date.isoformat(), evaluation_start=request.oos_start.isoformat(),
+            periods_per_year=ppy, rf=rf, cost_bps=request.transaction_cost_bps,
+            cap=request.max_long_weight, trading=trading, end_date=request.end_date.isoformat(),
+        )
+        settings = replace(settings, c=calibrated["selected_c"], epsilon=calibrated["selected_epsilon"])
+        history = historical_backtest(
+            returns, settings, window=window, oos_start=request.oos_start.isoformat(),
+            rf=rf, cost_bps=request.transaction_cost_bps, cap=request.max_long_weight, trading=trading,
+        )
+        latest, tuning, raw = latest_portfolios(
+            returns, settings, history, window=window, rf=rf, cap=request.max_long_weight,
+            trading=trading, return_raw=True,
+        )
+        label = lambda name: "Classical MV" if name == "Classical (main sample)" else name
+        allocations = lambda weights: [
+            {"Method": label(name), **dict(zip(returns.columns, w)), "Cash": 1-float(w.sum())}
+            for name, w in weights.items()
+        ]
+        summary = []
+        for method, group in history.groupby("Method", sort=False):
+            net = group["Net return"].to_numpy()
+            metrics = performance_metrics(net, gamma=request.gamma, periods_per_year=ppy)
+            excess = net-rf
+            summary.append({"Method": label(method), **metrics,
+                            "Annualized MV excess": ppy*(excess.mean()-request.gamma/2*np.var(excess, ddof=1)),
+                            "Average turnover": group["Turnover"].mean()})
+        tuning["Trace c"] = np.where(tuning["Method"] == "Trace tuning", settings.c, np.nan)
+        tuning["Trace ε"] = np.where(tuning["Method"] == "Trace tuning", settings.epsilon, np.nan)
+        return {
+            "selected_c": settings.c, "selected_epsilon": settings.epsilon,
+            "calibration_through": pd.Timestamp(calibrated["calibration_through"]).date().isoformat(),
+            "data_through": pd.Timestamp(returns.index[-1]).date().isoformat(),
+            "calibration": _records(calibrated["calibration"]), "summary": _records(pd.DataFrame(summary)),
+            "raw_allocations": _records(pd.DataFrame(allocations(raw))),
+            "allocations": _records(pd.DataFrame(allocations(latest))),
+            "tuning": _records(tuning), "history": _records(history),
+        }
+    except (ValueError, RuntimeError, np.linalg.LinAlgError) as exc:
         raise _request_error(exc) from exc

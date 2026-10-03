@@ -356,12 +356,6 @@ for method, group in result.groupby("Method", sort=False):
 st.dataframe(pd.DataFrame(summary).style.format({k: "{:.2%}" for k in summary[0] if k != "Method"}), hide_index=True, use_container_width=True)
 st.line_chart(pd.DataFrame(wealth), use_container_width=True)
 st.caption("Wealth index starts at 1. Historical MV statistics do not estimate the theorem's population K2 directly.")
-if practical:
-    table = pd.DataFrame(summary).set_index("Method")
-    st.subheader("Trace tuning versus old Portfolio")
-    compare = table.loc[[OLD_METHOD, "Trace tuning"]].reset_index()
-    st.dataframe(compare.style.format({k: "{:.2%}" for k in compare.columns if k != "Method"}), hide_index=True, use_container_width=True)
-    st.caption(f"Trace − old total return: {100*(table.loc['Trace tuning', 'Total return']-table.loc[OLD_METHOD, 'Total return']):+.2f} percentage points. Trace − old annualized MV excess: {100*(table.loc['Trace tuning', 'Annualized MV excess']-table.loc[OLD_METHOD, 'Annualized MV excess']):+.2f} percentage points. This is the complete historical test.")
 try:
     latest, tuning, raw_targets = _latest(returns, settings, result, window, rf, cap, trading)
     st.subheader("Raw optimal targets — before turnover control")

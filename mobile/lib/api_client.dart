@@ -35,6 +35,10 @@ class PortfolioApiClient {
     Map<String, dynamic> request,
   ) => _post('/v1/diffusion-ols/exposure', request);
 
+  Future<Map<String, dynamic>> feasibleTuning(
+    Map<String, dynamic> request,
+  ) => _post('/v1/feasible-tuning', request);
+
   Future<Map<String, dynamic>> _post(
     String path,
     Map<String, dynamic> request,

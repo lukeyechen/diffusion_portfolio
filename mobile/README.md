@@ -63,3 +63,16 @@ real semicolon-separated `_ALLOWED_GOOGLE_EMAILS` value on the
 
 The workflows generate the standard Flutter platform wrappers before compiling,
 so a developer does not need Flutter installed just to obtain the build artifact.
+
+
+## Feasible Tuning
+
+The iPhone PWA and Android share the Feasible Tuning page and authenticated
+`/v1/feasible-tuning` endpoint. Run jointly calibrates c and epsilon on data
+before the backtest start, freezes the winning pair, and compares Trace tuning
+with Classical MV and Old Portfolio. The default replay start is six calendar
+months before today. Fixed b, Same-sample ratio, manual c/epsilon/maximum-a
+controls, the cap-active column, and the duplicate Trace-versus-old table are
+omitted. Latest tuning values use an em dash for unused parameters.
+
+Deploy the updated API as well as the mobile builds before using this page.

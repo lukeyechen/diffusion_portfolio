@@ -226,3 +226,43 @@ def test_diffusion_ols_api_uses_shared_exposure_engine(monkeypatch):
     assert output["recommendation"]["cash_weight"] + sum(
         row["risky_weight"] for row in output["recommendation"]["assets"]
     ) == pytest.approx(1.0)
+
+
+def test_feasible_trace_matches_shared_engine_and_excludes_removed_methods(monkeypatch):
+    frame = pd.DataFrame(
+        np.random.default_rng(9).normal(.002, .02, (90, 5)),
+        index=pd.date_range("2020-01-03", periods=90, freq="W-FRI"),
+        columns=["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN"],
+    )
+    monkeypatch.setattr(api, "download_yahoo_returns", lambda *args, **kwargs: frame)
+    monkeypatch.setattr(api, "get_horizon_preset", lambda period: dict(
+        source="weekly", block_size=1, lookback=30, periods_per_year=52,
+        inner_folds=2, validation_size=5, min_train_size=10,
+    ))
+    request = api.FeasibleTraceRequest(
+        tickers=list(frame.columns), lookback=30, start_date=date(2020, 1, 1),
+        oos_start=frame.index[70].date(), end_date=frame.index[-1].date(),
+        cs=[.25, 1], epsilons=[.01, .25], reverse_steps=10,
+        synthetic_equivalent_m=10,
+    )
+    result = api.feasible_trace(request, {})
+    winner = max(result["calibration"], key=lambda row: row["Annualized MV excess"])
+    assert result["selected_c"] == winner["c"]
+    assert result["selected_epsilon"] == winner["ε"]
+    assert pd.Timestamp(result["calibration_through"]) < pd.Timestamp(request.oos_start)
+    assert {row["Method"] for row in result["summary"]} == {
+        "Classical MV", "Trace tuning", "Old Portfolio (Best-T + turnover control)"
+    }
+    assert "a cap active" not in result["tuning"][0]
+    trace = next(row for row in result["tuning"] if row["Method"] == "Trace tuning")
+    assert trace["Trace c"] == result["selected_c"]
+    assert trace["Trace ε"] == result["selected_epsilon"]
+    assert "/v1/feasible-tuning" in api.app.openapi()["paths"]
+    assert api.app.openapi()["paths"]["/v1/feasible-tuning"]["post"]["parameters"][0]["name"] == "authorization"
+
+
+def test_feasible_trace_defaults(monkeypatch):
+    request = api.FeasibleTraceRequest(tickers=["AAPL"])
+    today = pd.Timestamp(api._trace_today())
+    assert request.oos_start == (today - pd.DateOffset(months=6)).date()
+    assert request.end_date == today.date()
