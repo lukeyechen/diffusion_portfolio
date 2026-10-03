@@ -7,7 +7,6 @@ from core.feasible_tuning import (OLD_METHOD, TradingComparison, TuningSettings,
                                  coefficients, endpoint_moments, fit_portfolios,
                                  historical_backtest, latest_portfolios, moments)
 from core.feasible_tuning import epsilon_sensitivity
-from core.portfolio_rules import compute_weights
 from core.short_horizon_portfolio import replay_latest_recommendation
 
 
@@ -60,7 +59,9 @@ class FeasibleTuningTests(unittest.TestCase):
         trace = diagnostic.set_index("Method").loc["Trace tuning"]
         self.assertTrue(trace["a cap active"])
         self.assertAlmostEqual(trace["a"], 0.3)
-        for w in portfolios.values():
+        for name, w in portfolios.items():
+            if name.startswith("Classical"):
+                continue
             self.assertTrue(np.all(w >= -1e-10))
             self.assertTrue(np.all(w <= 0.4+1e-10))
             self.assertLessEqual(w.sum(), 1+1e-8)
@@ -68,11 +69,12 @@ class FeasibleTuningTests(unittest.TestCase):
     def test_historical_weights_are_past_only_and_costs_match(self):
         dates = pd.date_range("2020-01-03", periods=40, freq="W-FRI")
         frame = pd.DataFrame(self.sample, index=dates, columns=["A", "B"])
-        original = historical_backtest(frame, self.settings, window=15,
+        settings = TuningSettings(gamma=30)
+        original = historical_backtest(frame, settings, window=15,
                                        pilot_size=10, cap=0.4, cost_bps=25)
         altered = frame.copy()
         altered.iloc[35:] = 0.5
-        other = historical_backtest(altered, self.settings, window=15,
+        other = historical_backtest(altered, settings, window=15,
                                     pilot_size=10, cap=0.4, cost_bps=25)
         pd.testing.assert_frame_equal(original[original["Date"] < dates[35]],
                                       other[other["Date"] < dates[35]])
@@ -106,7 +108,9 @@ class FeasibleTuningTests(unittest.TestCase):
         np.testing.assert_allclose(latest[OLD_METHOD], old["weights"], atol=1e-8)
         self.assertAlmostEqual(diagnostic.set_index("Method").loc[OLD_METHOD, "T"], old["T"])
         self.assertNotIn("Pilot ratio", latest)
-        for w in latest.values():
+        for name, w in latest.items():
+            if name.startswith("Classical"):
+                continue
             self.assertAlmostEqual(w.sum(), 1)
             self.assertLessEqual(w.max(), trading.cap+1e-9)
         changed = frame.copy()
@@ -133,8 +137,7 @@ class FeasibleTuningTests(unittest.TestCase):
         final, _, raw = fit_portfolios(self.sample, self.settings, trading=trading,
                                        previous=previous, return_raw=True)
         u, h = moments(self.sample)
-        expected = compute_weights("Mean-Variance", u, h, gamma=self.settings.gamma,
-                                   constraint_mode="Long-only", max_long_weight=0.6)
+        expected = np.linalg.solve(h, u) / self.settings.gamma
         np.testing.assert_allclose(raw["Classical (main sample)"], expected, atol=1e-10)
         pure_trading = TradingComparison(inner_folds=2, validation_size=5, min_train_size=20,
                                          cap=0.6, candidate_t=(0.0,), m=10, n_steps=10,
@@ -170,10 +173,11 @@ class FeasibleTuningTests(unittest.TestCase):
         options = dict(window=15, calibration_start="2020-01-01",
                        evaluation_start=str(frame.index[30].date()), periods_per_year=52,
                        cap=.4, cost_bps=25)
-        result = epsilon_sensitivity(frame, self.settings, [.001, .01, .25], **options)
+        settings = TuningSettings(gamma=30)
+        result = epsilon_sensitivity(frame, settings, [.001, .01, .25], **options)
         changed = frame.copy()
         changed.iloc[30:] = [.2, -.1]
-        other = epsilon_sensitivity(changed, self.settings, [.001, .01, .25], **options)
+        other = epsilon_sensitivity(changed, settings, [.001, .01, .25], **options)
         pd.testing.assert_frame_equal(result["calibration"], other["calibration"])
         self.assertEqual(result["selected_epsilon"], other["selected_epsilon"])
         self.assertLess(result["calibration_through"], frame.index[30])
@@ -181,10 +185,34 @@ class FeasibleTuningTests(unittest.TestCase):
         np.testing.assert_allclose(result["evaluation"].iloc[:2][["Weight A", "Weight B"]],
                                    other["evaluation"].iloc[:2][["Weight A", "Weight B"]])
         for method, group in result["evaluation"].groupby("Method"):
-            self.assertAlmostEqual(group.iloc[0]["Turnover"], group.iloc[0][["Weight A", "Weight B"]].sum())
+            w = group.iloc[0][["Weight A", "Weight B"]].to_numpy(dtype=float)
+            self.assertAlmostEqual(group.iloc[0]["Turnover"], .5*(np.abs(w).sum()+abs(w.sum())))
         for invalid in ([0], [-1], [np.nan], list(range(1, 14))):
             with self.assertRaises(ValueError):
                 epsilon_sensitivity(frame, self.settings, invalid, **options)
+
+    def test_classical_closed_form_never_calls_allocation_optimizers(self):
+        from unittest.mock import patch
+        u, h = moments(self.sample)
+        expected = np.linalg.solve(h, u) / self.settings.gamma
+        trading = TradingComparison(inner_folds=2, validation_size=5, min_train_size=20,
+                                    cap=.6, turnover_penalty=.02, rebalance_alpha=.1)
+        with patch("core.feasible_tuning.solve_mv_turnover_aware", side_effect=AssertionError("optimizer called")), \
+             patch("core.feasible_tuning.allocate_exposure", side_effect=AssertionError("optimizer called")), \
+             patch("core.feasible_tuning.compute_weights", side_effect=AssertionError("optimizer called")):
+            portfolios, _, raw = fit_portfolios(self.sample, self.settings, trading=trading,
+                                                previous={"Classical (main sample)": np.array([.1, .9])},
+                                                methods=(), return_raw=True)
+            self.assertEqual(list(portfolios), ["Classical (main sample)"])
+            np.testing.assert_allclose(portfolios["Classical (main sample)"], expected)
+            np.testing.assert_allclose(raw["Classical (main sample)"], expected)
+            cash_portfolios, _ = fit_portfolios(self.sample, self.settings, cap=.01, methods=())
+            np.testing.assert_allclose(cash_portfolios["Classical (main sample)"], expected)
+
+    def test_classical_bankruptcy_is_reported_without_clipping_weights(self):
+        frame = pd.DataFrame(self.sample, index=pd.date_range("2020-01-03", periods=40, freq="W-FRI"), columns=["A", "B"])
+        with self.assertRaisesRegex(ValueError, "Classical MV exhausts its capital"):
+            historical_backtest(frame, self.settings, window=15, cap=.4)
 
 
 if __name__ == "__main__":
