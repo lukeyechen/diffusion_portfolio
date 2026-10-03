@@ -252,3 +252,31 @@ def test_live_upgrade_refreshes_stale_feasible_module_once():
     finally:
         if not hasattr(module, "epsilon_sensitivity"):
             module.epsilon_sensitivity = original
+
+
+def test_c_calibration_and_joint_results_survive_navigation():
+    app = AppTest.from_string(NAVIGATION_APP)
+    returns = _returns()
+    app.session_state["feasible_data"] = ((tuple(returns.columns), "2000-01-01", "1 week"), returns)
+    app.run()
+    _field(app, "radio", "Allocation").set_value("Long-only with cash (empirical comparison)").run()
+    _field(app, "number_input", "Main estimation window").set_value(120).run()
+    _field(app, "text_input", "c candidates (0 < c ≤ 4; maximum 12)").set_value("1,4").run()
+    _field(app, "text_input", "c final evaluation starts").set_value(str(returns.index[220].date())).run()
+    _field(app, "button", "Run c calibration and final evaluation").click().run(timeout=30)
+    assert not app.exception and not app.error
+    assert len(app.dataframe[0].value) == 2
+    assert app.dataframe[0].value["ε"].eq(.25).all()
+    original = app.dataframe[0].value.copy()
+    _leave_and_return(app)
+    pd.testing.assert_frame_equal(original, app.dataframe[0].value)
+    assert _field(app, "number_input", "Trace c (0 < c ≤ 4)").value == 4
+    _field(app, "radio", "Trace calibration mode").set_value("Joint c and ε").run()
+    assert not app.dataframe
+    _field(app, "text_input", "Joint ε candidates (maximum 12)").set_value(".01,.25").run()
+    _field(app, "button", "Run c calibration and final evaluation").click().run(timeout=30)
+    assert not app.exception and not app.error
+    assert len(app.dataframe[0].value) == 4
+    _field(app, "text_input", "c candidates (0 < c ≤ 4; maximum 12)").set_value("5").run()
+    _field(app, "button", "Run c calibration and final evaluation").click().run(timeout=30)
+    assert app.error and not app.exception
