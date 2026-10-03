@@ -2,6 +2,9 @@ from streamlit.testing.v1 import AppTest
 from pathlib import Path
 import numpy as np
 import pandas as pd
+from core.short_horizon_portfolio import get_horizon_preset, replay_latest_recommendation
+from core.feasible_tuning import moments
+from core.portfolio_rules import compute_weights
 
 PAGE = Path(__file__).resolve().parents[1] / "views" / "Feasible_Tuning.py"
 NAVIGATION_APP = f"""
@@ -66,7 +69,7 @@ def test_historical_controls_and_results_without_live_download():
     run.click().run(timeout=30)
     assert not app.exception
     assert not app.error
-    assert len(app.dataframe) == 4
+    assert len(app.dataframe) == 5
     assert "Trace tuning" in app.dataframe[0].value["Method"].values
     assert "Backtest / strategy replay start date" in [item.label for item in app.text_input]
     assert "Pilot ratio" not in app.dataframe[0].value["Method"].values
@@ -77,11 +80,21 @@ def test_comparison_controls_reuse_saved_portfolio_settings():
     frame = pd.DataFrame(np.random.default_rng(3).normal(0.001, 0.02, (530, 5)),
                          index=pd.date_range("2015-01-02", periods=530, freq="W-FRI"),
                          columns=["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN"])
-    app.session_state["shared_current_window"] = dict(
+    snapshot = dict(
         full_returns=frame, holding_period="1 week", lookback=520, gamma=4.0,
         max_long_weight=0.4, turnover_penalty=0.0015, rebalance_alpha=0.6,
-        m=100, beta=1.5, n_steps=50,
+        m=100, beta=1.5, n_steps=10, replay_start="2024-01-01",
     )
+    cfg = get_horizon_preset("1 week")
+    rec = replay_latest_recommendation(frame, cfg, gamma=4.0, m=100, beta=1.5,
+                                       n_steps=10, turnover_penalty=.0015,
+                                       rebalance_alpha=.6, max_long_weight=.4,
+                                       replay_start="2024-01-01")
+    u, h = moments(frame.iloc[-520:].to_numpy())
+    snapshot.update(weights=rec["weights"], validation_config=cfg,
+                    classical_weights=compute_weights("Mean-Variance", u, h, gamma=4,
+                                                       constraint_mode="Long-only", max_long_weight=.4))
+    app.session_state["shared_current_window"] = snapshot
     app.run()
     assert not app.exception
     fields = {item.label: item.value for item in app.number_input}
@@ -91,15 +104,16 @@ def test_comparison_controls_reuse_saved_portfolio_settings():
     assert fields["Rebalance step (%)"] == 60.0
     assert fields["Old-method synthetic-equivalent M"] == 100
     assert fields["Constant β"] == 1.5
-    assert fields["Old-method reverse SDE steps"] == 50
+    assert fields["Old-method reverse SDE steps"] == 10
+    assert _field(app, "text_input", "Backtest / strategy replay start date").value == "2024-01-01"
+    assert _field(app, "number_input", "Main estimation window").disabled
     assert not any("Pilot" in item.label for item in app.checkbox)
-    steps = next(item for item in app.number_input if item.label == "Old-method reverse SDE steps")
-    steps.set_value(10).run()
     run = next(item for item in app.button if item.label == "Run feasible-tuning backtest")
     run.click().run(timeout=60)
     assert not app.exception
     assert not app.error
-    assert len(app.dataframe) == 5
+    assert len(app.dataframe) == 7
+    assert any("both match the saved Portfolio" in item.value for item in app.success)
     assert "Old Portfolio (Best-T + turnover control)" in app.dataframe[2].value["Method"].values
     assert "Pilot ratio" not in app.dataframe[2].value["Method"].values
 
@@ -118,7 +132,7 @@ def test_historical_results_survive_navigation_and_new_portfolio_snapshot():
     assert not app.exception
     assert not app.error
     original = [item.value.copy() for item in app.dataframe]
-    assert len(original) == 4
+    assert len(original) == 5
     app.sidebar.radio[0].set_value("Other").run()
     assert not app.number_input
     # The Portfolio page can create a snapshot while Feasible Tuning is absent.
@@ -171,5 +185,44 @@ def test_uploaded_data_and_results_survive_navigation():
     _leave_and_return(app)
     assert _field(app, "radio", "Data source").value == "Upload CSV"
     assert any("returns.csv" in item.value for item in app.caption)
-    assert len(app.dataframe) == 4
+    assert len(app.dataframe) == 5
     pd.testing.assert_frame_equal(original, app.dataframe[0].value)
+
+
+def test_shared_snapshot_refresh_overrides_stale_common_inputs():
+    app = AppTest.from_string(NAVIGATION_APP)
+    frame = pd.DataFrame(np.random.default_rng(3).normal(.001, .02, (530, 5)),
+                         index=pd.date_range("2015-01-02", periods=530, freq="W-FRI"),
+                         columns=["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN"])
+    snapshot = dict(full_returns=frame, holding_period="1 week", lookback=520,
+                    gamma=4.0, max_long_weight=.4, n_steps=10, replay_start="2024-01-01")
+    app.session_state["shared_current_window"] = snapshot
+    app.run()
+    app.sidebar.radio[0].set_value("Other").run()
+    app.session_state["shared_current_window"] = dict(snapshot, gamma=2.0, replay_start="2023-01-01")
+    app.sidebar.radio[0].set_value("Feasible Tuning").run()
+    assert not app.exception
+    assert _field(app, "number_input", "Risk aversion γ").value == 2.0
+    assert _field(app, "text_input", "Backtest / strategy replay start date").value == "2023-01-01"
+    assert _field(app, "radio", "Allocation").value == "Turnover-controlled comparison with old Portfolio"
+
+
+def test_epsilon_experiment_survives_navigation_and_leaves_main_setting_unchanged():
+    app = AppTest.from_string(NAVIGATION_APP)
+    returns = _returns()
+    app.session_state["feasible_data"] = ((tuple(returns.columns), "2000-01-01", "1 week"), returns)
+    app.run()
+    _field(app, "radio", "Allocation").set_value("Long-only with cash (empirical comparison)").run()
+    _field(app, "number_input", "Main estimation window").set_value(120).run()
+    _field(app, "text_input", "Positive ε candidates (maximum 12)").set_value("0.001,0.25").run()
+    _field(app, "text_input", "Final evaluation starts").set_value(str(returns.index[220].date())).run()
+    _field(app, "button", "Run ε calibration and final evaluation").click().run(timeout=30)
+    assert not app.exception
+    assert not app.error
+    assert len(app.dataframe) == 2
+    original = [item.value.copy() for item in app.dataframe]
+    assert _field(app, "number_input", "Trace ε").value == .25
+    _leave_and_return(app)
+    assert len(app.dataframe) == 2
+    for before, after in zip(original, app.dataframe):
+        pd.testing.assert_frame_equal(before, after.value)
