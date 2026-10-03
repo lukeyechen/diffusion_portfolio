@@ -48,4 +48,28 @@ void main() {
     expect(find.text('Maximum a'), findsNothing);
     expect(find.text('Trace tuning versus old Portfolio'), findsNothing);
   });
+  testWidgets('all navigation tabs fit on a narrow iPhone', (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      const DiffusionPortfolioApp(initializeGoogleSignIn: false),
+    );
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    final navigation = find.byType(NavigationBar);
+    expect(find.descendant(of: navigation, matching: find.text('Tuning')), findsOneWidget);
+    for (final label in ['Portfolio', 'Backtest', 'OLS', 'Tuning']) {
+      final tab = find.descendant(of: navigation, matching: find.text(label));
+      final rect = tester.getRect(tab);
+      expect(rect.left, greaterThanOrEqualTo(0));
+      expect(rect.right, lessThanOrEqualTo(320));
+    }
+    await tester.tap(find.descendant(of: navigation, matching: find.text('Tuning')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Run automatically selects c'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
 }
