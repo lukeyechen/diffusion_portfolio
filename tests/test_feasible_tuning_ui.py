@@ -293,7 +293,7 @@ def test_trace_c_precision_and_latest_noise_labels():
     tuning = next(item.value for item in app.dataframe if "Trace c" in item.value.columns).set_index("Method")
     assert float(tuning.loc["Trace tuning", "Trace c"]) == .025
     assert "Fixed b" not in tuning.index
-    assert "a cap active" not in tuning.columns
+    assert not {"a cap active", "a", "Effective b = n a"} & set(tuning.columns)
     for table in app.dataframe:
         if "Method" in table.value.columns:
             assert "Fixed b" not in table.value["Method"].values

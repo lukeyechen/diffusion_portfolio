@@ -378,7 +378,7 @@ try:
         else:
             st.warning("The saved Portfolio comparison does not match. Rerun Portfolio and this comparison with the complete saved settings before interpreting the differences.")
     st.subheader("Latest tuning values")
-    tuning_display = tuning.copy()
+    tuning_display = tuning.drop(columns=["a", "Effective b = n a"], errors="ignore").copy()
     trace_rows = tuning_display["Method"] == "Trace tuning"
     tuning_display.insert(1, "Trace c", np.where(trace_rows, settings.c, np.nan))
     tuning_display.insert(2, "Trace ε", np.where(trace_rows, settings.epsilon, np.nan))

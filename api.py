@@ -800,7 +800,7 @@ def feasible_trace(
             "calibration": _records(calibrated["calibration"]), "summary": _records(pd.DataFrame(summary)),
             "raw_allocations": _records(pd.DataFrame(allocations(raw))),
             "allocations": _records(pd.DataFrame(allocations(latest))),
-            "tuning": _records(tuning), "history": _records(history),
+            "tuning": _records(tuning.drop(columns=["a", "Effective b = n a"], errors="ignore")), "history": _records(history),
         }
     except (ValueError, RuntimeError, np.linalg.LinAlgError) as exc:
         raise _request_error(exc) from exc
