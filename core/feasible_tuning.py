@@ -1,8 +1,9 @@
 """Exact continuous-time portfolio proxy and feasible b tuning.
 
 This is the unconditional Gaussian portfolio experiment, not diffusion OLS.
-H is the centered MLE covariance. No finite synthetic sample or Euler stepping
-is used. The theorem concerns unconstrained, frictionless expected utility.
+H is the centered MLE covariance; direct tuning uses exact continuous moments.
+The optional old-strategy comparator preserves its original finite-step model.
+The theorem concerns unconstrained, frictionless expected utility.
 """
 from dataclasses import dataclass
 
@@ -10,6 +11,44 @@ import numpy as np
 import pandas as pd
 
 from .diffusion_exposure import allocate_exposure
+from .short_horizon_portfolio import (CANDIDATE_T, project_long_only_capped,
+                                     turnover_controlled_target)
+from .turnover_upgrade import partial_rebalance, solve_mv_turnover_aware
+
+OLD_METHOD = "Old Portfolio (Best-T + turnover control)"
+
+
+@dataclass(frozen=True)
+class TradingComparison:
+    """Common practical allocation settings, outside the theorem's guarantee."""
+    inner_folds: int = 4
+    validation_size: int = 52
+    min_train_size: int = 200
+    turnover_penalty: float = 0.0025
+    rebalance_alpha: float = 0.5
+    cap: float = 0.4
+    m: int = 500
+    beta: float = 1.0
+    n_steps: int = 100
+    candidate_t: tuple = tuple(CANDIDATE_T)
+
+    def validate(self, n, assets):
+        if self.inner_folds < 2 or self.validation_size < 2 or self.min_train_size < 2:
+            raise ValueError("Old-method validation requires at least two folds and observations per block.")
+        if n < self.min_train_size + self.inner_folds * self.validation_size:
+            raise ValueError("Increase the common window to fit the old method's nested validation blocks.")
+        if not 0 < self.cap <= 1 or self.cap * assets < 1 - 1e-12:
+            raise ValueError("The common fully invested allocation needs cap × asset count ≥ 1.")
+        if (not np.isfinite([self.turnover_penalty, self.rebalance_alpha, self.beta]).all()
+                or self.turnover_penalty < 0 or not 0 < self.rebalance_alpha <= 1
+                or self.beta <= 0 or self.m < 0 or self.n_steps < 1):
+            raise ValueError("Invalid old-method trading or diffusion settings.")
+        if not self.candidate_t or any(not np.isfinite(t) or t < 0 for t in self.candidate_t):
+            raise ValueError("Old-method candidate T values must be finite and nonnegative.")
+
+    def validation_config(self, n):
+        return dict(lookback=n, inner_folds=self.inner_folds,
+                    validation_size=self.validation_size, min_train_size=self.min_train_size)
 
 
 @dataclass(frozen=True)
@@ -67,10 +106,13 @@ def ratio_b(u, h, settings):
     return settings.b_max if q <= 0 else float(np.clip(a / q, settings.b_min, settings.b_max))
 
 
-def fit_portfolios(sample, settings, *, pilot=None, cap=None):
+def fit_portfolios(sample, settings, *, pilot=None, cap=None, trading=None, previous=None):
     settings.validate()
     u, h = moments(sample)
     n = len(sample)
+    previous = {} if previous is None else previous
+    if trading is not None:
+        trading.validate(n, len(u))
     choices = {
         "Fixed b": settings.fixed_b,
         "Same-sample ratio": ratio_b(u, h, settings),
@@ -82,26 +124,47 @@ def fit_portfolios(sample, settings, *, pilot=None, cap=None):
             raise ValueError("Pilot and main sample must have the same assets.")
         choices["Pilot ratio"] = ratio_b(pilot_u, pilot_h, settings)
 
-    def weights(mean, covariance):
+    def weights(mean, covariance, name):
+        if trading is not None:
+            prev = previous.get(name, np.full(len(u), 1/len(u)))
+            raw = solve_mv_turnover_aware(mean, covariance, prev,
+                                         trading.turnover_penalty, gamma=settings.gamma,
+                                         max_long_weight=trading.cap)
+            final = partial_rebalance(raw, prev, trading.rebalance_alpha)
+            return project_long_only_capped(final, trading.cap)
         if cap is None:
             return np.linalg.solve(covariance, mean) / settings.gamma
         return allocate_exposure(mean, covariance, gamma=settings.gamma, cap=cap)
 
-    portfolios = {"Classical (main sample)": weights(u, h)}
+    portfolios = {"Classical (main sample)": weights(u, h, "Classical (main sample)")}
     diagnostics = []
     for name, b in choices.items():
         a = min(settings.a_max, b / n)
         mean, covariance = endpoint_moments(u, h, a)
-        portfolios[name] = weights(mean, covariance)
+        portfolios[name] = weights(mean, covariance, name)
         diagnostics.append({
             "Method": name, "b": b, "a": a,
             "Effective b = n a": n * a,
             "a cap active": b / n > settings.a_max,
-            "T (beta=1)": -float(np.log(a)),
+            "T": -float(np.log(a)) / (trading.beta if trading else 1.0),
+            "Horizon rule": "Direct b rule",
         })
     if pilot is not None:
         full_u, full_h = moments(np.concatenate([pilot, sample]))
-        portfolios["Classical (main + pilot)"] = weights(full_u, full_h)
+        portfolios["Classical (main + pilot)"] = weights(full_u, full_h, "Classical (main + pilot)")
+    if trading is not None:
+        old = turnover_controlled_target(
+            sample, previous.get(OLD_METHOD, np.full(len(u), 1/len(u))),
+            trading.validation_config(n), gamma=settings.gamma, m=trading.m,
+            beta=trading.beta, n_steps=trading.n_steps,
+            candidate_t=list(trading.candidate_t), turnover_penalty=trading.turnover_penalty,
+            rebalance_alpha=trading.rebalance_alpha, max_long_weight=trading.cap,
+            mean_model="Original diffusion mean",
+        )
+        portfolios[OLD_METHOD] = old["weights"]
+        diagnostics.append({"Method": OLD_METHOD, "b": np.nan, "a": np.nan,
+                            "Effective b = n a": np.nan, "a cap active": False,
+                            "T": old["T"], "Horizon rule": "Nested candidate grid"})
     return portfolios, pd.DataFrame(diagnostics)
 
 
@@ -138,14 +201,15 @@ def coefficients(mu, sigma, settings):
     return pd.DataFrame(rows)
 
 
-def gaussian_experiment(mu, sigma, settings, *, n=500, repetitions=1000, seed=42):
+def gaussian_experiment(mu, sigma, settings, *, n=500, repetitions=1000, seed=42,
+                        include_pilot=False):
     if n <= len(mu) + 4 or repetitions < 2:
         raise ValueError("Increase Gaussian sample size or repetitions.")
     rng = np.random.default_rng(seed)
     gains = {}
     for _ in range(repetitions):
         main = rng.multivariate_normal(mu, sigma, n)
-        pilot = rng.multivariate_normal(mu, sigma, n)
+        pilot = rng.multivariate_normal(mu, sigma, n) if include_pilot else None
         portfolios, _ = fit_portfolios(main, settings, pilot=pilot)
         utility = lambda w: float(w @ mu - settings.gamma / 2 * w @ sigma @ w)
         baseline = utility(portfolios["Classical (main sample)"])
@@ -165,7 +229,8 @@ def gaussian_experiment(mu, sigma, settings, *, n=500, repetitions=1000, seed=42
 
 
 def historical_backtest(returns, settings, *, window=120, pilot_size=0,
-                        oos_start="2019-01-01", rf=0.0, cost_bps=0.0, cap=None):
+                        oos_start="2019-01-01", rf=0.0, cost_bps=0.0, cap=None,
+                        trading=None):
     if window <= returns.shape[1] or (pilot_size and pilot_size <= returns.shape[1]):
         raise ValueError("Main and pilot windows must exceed the asset count.")
     if not 0 <= cost_bps < 10000 or rf <= -1 or not np.isfinite(rf):
@@ -183,11 +248,16 @@ def historical_backtest(returns, settings, *, window=120, pilot_size=0,
             continue
         sample = values[t-window:t] - rf
         pilot = values[t-window-pilot_size:t-window] - rf if pilot_size else None
-        portfolios, diagnostics = fit_portfolios(sample, settings, pilot=pilot, cap=cap)
+        portfolios, diagnostics = fit_portfolios(
+            sample, settings, pilot=pilot, cap=cap, trading=trading,
+            previous={name: w[:-1] for name, w in previous.items()},
+        )
         diag = diagnostics.set_index("Method")
         for method, w in portfolios.items():
             target = np.r_[w, 1 - w.sum()]
-            old = previous.get(method, np.r_[np.zeros(len(w)), 1.0])
+            initial = (np.r_[np.full(len(w), 1/len(w)), 0.0] if trading
+                       else np.r_[np.zeros(len(w)), 1.0])
+            old = previous.get(method, initial)
             turnover = float(np.abs(target-old).sum() / 2)
             gross = float(rf + w @ (values[t] - rf))
             net = gross - cost_bps * 1e-4 * turnover
@@ -204,3 +274,19 @@ def historical_backtest(returns, settings, *, window=120, pilot_size=0,
     if not rows:
         raise ValueError("No evaluated periods remain; download more history or adjust the start and windows.")
     return pd.DataFrame(rows)
+
+
+def latest_portfolios(returns, settings, history, *, window, rf=0.0, cap=None, trading=None):
+    """Next target from each method's own last holdings, with no extra replay."""
+    if len(returns) < window:
+        raise ValueError("Not enough observations for the common estimation window.")
+    previous = {}
+    if trading is not None:
+        for method, group in history.groupby("Method", sort=False):
+            last = group.iloc[-1]
+            if pd.Timestamp(last["Date"]) != pd.Timestamp(returns.index[-1]):
+                raise ValueError("The replay must include the latest data period before calculating next weights.")
+            w = np.array([last[f"Weight {asset}"] for asset in returns.columns])
+            previous[method] = w * (1 + returns.iloc[-1].to_numpy()) / (1 + last["Gross return"])
+    return fit_portfolios(returns.iloc[-window:].to_numpy()-rf, settings,
+                          cap=cap, trading=trading, previous=previous)
