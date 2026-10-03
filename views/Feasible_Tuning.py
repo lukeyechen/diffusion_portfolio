@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import importlib
+from dataclasses import replace
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -22,12 +23,6 @@ if (not hasattr(_feasible_module, "trace_calibration")
 from core.feasible_tuning import (OLD_METHOD, TradingComparison, TuningSettings, coefficients,
                                  epsilon_sensitivity, trace_calibration, gaussian_experiment, historical_backtest, latest_portfolios)
 from core.short_horizon_portfolio import CANDIDATE_T, HORIZON_PRESETS, aggregate_nonoverlapping, get_horizon_preset, performance_metrics
-
-
-def _apply_trace_settings(c, epsilon):
-    for name, value in (("trace_c", c), ("trace_epsilon", epsilon)):
-        st.session_state.setdefault("feasible_inputs", {})[name] = float(value)
-        st.session_state["_feasible_widget_" + name] = float(value)
 
 
 def _remember_input(name, widget_key):
@@ -128,17 +123,12 @@ elif experiment == "Historical backtest":
     st.session_state.setdefault("feasible_inputs", {}).setdefault("use_shared", False)
 defaults = shared if use_shared else {}
 
-s1, s2, s3 = st.columns(3)
-gamma = _input(s1, "number_input", "Risk aversion γ", min_value=0.01,
+gamma = _input(st, "number_input", "Risk aversion γ", min_value=0.01,
                         value=1.0 if experiment == "Gaussian theorem check" else float(defaults.get("gamma", 3.0)),
                         sync=use_shared, disabled=use_shared,
                         key="feasible_gamma_" + experiment + str(use_shared))
-c = _input(s2, "number_input", "Trace c (0 < c ≤ 4)", min_value=0.000001, max_value=4.0, value=4.0, step=0.001, format="%.6f", key="trace_c")
-epsilon = _input(s3, "number_input", "Trace ε", min_value=0.000001, value=0.25, format="%.6f", key="trace_epsilon",
-                          help="Positive variance-scale constant chosen before using the main sample.")
-s4 = st
-a_max = _input(s4, "number_input", "Maximum a", min_value=0.01, max_value=0.999, value=0.95, key="a_max")
-settings = TuningSettings(gamma=gamma, c=c, epsilon=epsilon, a_max=a_max)
+# Historical c and epsilon are selected jointly below; a_max is an internal safeguard.
+settings = TuningSettings(gamma=gamma, c=4.0, epsilon=0.25, a_max=0.95)
 try:
     settings.validate()
 except ValueError as exc:
@@ -155,6 +145,7 @@ with st.expander("Implemented rules and theorem scope"):
     st.write("Choose c and ε before examining the main sample. The theorem is not a guarantee for parameters selected retrospectively to maximize this backtest. Returns are in decimal units and the identity reference makes coordinate units consequential.")
 
 if experiment == "Gaussian theorem check":
+    st.caption("The Gaussian theorem check uses c = 4, ε = 0.25 and maximum a = 0.95. Automatic historical calibration is available in Historical backtest mode.")
     st.caption("Known population moments let us evaluate true utility, rather than treating in-sample fitted utility as truth. Compare Trace tuning with the classical estimator.")
     g1, g2, g3, g4 = st.columns(4)
     assets = _input(g1, "number_input", "Number of assets", min_value=1, max_value=10, value=1, key="gaussian_assets")
@@ -289,22 +280,19 @@ signature = (_feasible_module.COMPARISON_VERSION, _feasible_module.CLASSICAL_MV_
 history_default = str(pd.Timestamp(returns.index[0]).date()) if use_shared else start
 today_default = datetime.now(ZoneInfo("America/Havana")).date().isoformat()
 
-eligible_dates = returns.index[window:]
-default_final = str(pd.Timestamp(eligible_dates[int(0.8*len(eligible_dates))]).date()) if len(eligible_dates) else oos_start
-
-with st.expander("Trace calibration: c, ε, or both"):
-    st.caption("The end date defaults to today; only available completed return periods are used. Final evaluation starts is the earlier calibration/evaluation split. Select c alone with the main ε fixed, or search both jointly. Select by net annualized MV excess on past calibration data, then freeze both values for a later evaluation. Main backtest settings stay unchanged. Ties select the first pair in candidate order.")
-    grid_mode = _input(st, "radio", "Trace calibration mode", options=["c only (fixed ε)", "ε only (fixed c)", "Joint c and ε"], key="trace_grid_mode")
-    cs_text = _input(st, "text_input", "c candidates (0 < c ≤ 4; maximum 12)", value="0.25,0.5,1,1.5,2,2.5,3,3.5,4", key="trace_cs", disabled=grid_mode.startswith("ε only"))
-    eps_text = _input(st, "text_input", "Joint ε candidates (maximum 12)", value="0.001,0.005,0.01,0.05,0.10,0.25", key="trace_eps", disabled=grid_mode.startswith("c only"))
+with st.expander("Automatic Trace calibration"):
+    st.caption("Run automatically selects c and ε jointly using data before the evaluation split, then freezes them for the main backtest. You can adjust the candidate grids and dates here.")
+    cs_text = _input(st, "text_input", "c candidates (0 < c ≤ 4; maximum 12)", value="0.25,0.5,1,2,4", key="trace_cs")
+    eps_text = _input(st, "text_input", "Joint ε candidates (maximum 12)", value="0.001,0.01,0.05,0.10,0.25", key="trace_eps")
     grid_start = _input(st, "text_input", "c calibration starts", value=history_default, key="trace_start")
-    grid_final = _input(st, "text_input", "c final evaluation starts", value=default_final, key="trace_final")
+    grid_final = oos_start
+    st.caption(f"Calibration ends before the main backtest starts: {grid_final}.")
     grid_end = _input(st, "text_input", "c calibration / evaluation end date", value=today_default, key="trace_end")
-    grid_signature = (signature, grid_mode, cs_text, eps_text, grid_start, grid_final, ppy, grid_end)
+    grid_signature = (signature, cs_text, eps_text, grid_start, grid_final, ppy, grid_end)
     if st.button("Run c calibration and final evaluation"):
         try:
-            cs = (settings.c,) if grid_mode.startswith("ε only") else tuple(float(v.strip()) for v in cs_text.split(",") if v.strip())
-            eps = (settings.epsilon,) if grid_mode.startswith("c only") else tuple(float(v.strip()) for v in eps_text.split(",") if v.strip())
+            cs = tuple(float(v.strip()) for v in cs_text.split(",") if v.strip())
+            eps = tuple(float(v.strip()) for v in eps_text.split(",") if v.strip())
             with st.spinner("Calibrating trace settings on past data, then evaluating the frozen pair..."):
                 grid_result = _trace_grid(returns, settings, eps, cs, window, grid_start, grid_final, ppy, rf, cost, cap, trading, grid_end)
             st.session_state["feasible_trace_grid_result"] = (grid_signature, grid_result)
@@ -314,8 +302,6 @@ with st.expander("Trace calibration: c, ε, or both"):
     if saved_grid is not None and saved_grid[0] == grid_signature:
         grid_result = saved_grid[1]
         st.write(f"Frozen c: {grid_result['selected_c']:g}; frozen ε: {grid_result['selected_epsilon']:g}. Calibration through {pd.Timestamp(grid_result['calibration_through']).date()}.")
-        st.button("Apply selected c and ε to main backtest", on_click=_apply_trace_settings,
-                  args=(grid_result["selected_c"], grid_result["selected_epsilon"]))
         st.write("c calibration results")
         grid_formats = {k: "{:.3%}" for k in grid_result["calibration"].columns if k not in ("c", "ε", "Periods")}
         st.dataframe(grid_result["calibration"].style.format(grid_formats), hide_index=True, use_container_width=True)
@@ -334,19 +320,27 @@ with st.expander("Trace calibration: c, ε, or both"):
         st.line_chart(pd.DataFrame({_label(name, practical): pd.Series(np.cumprod(1+group["Net return"].to_numpy()), index=group["Date"]) for name, group in grid_history.groupby("Method", sort=False)}))
         st.caption("Choose grids and dates before examining final results. Repeated selection using the final period makes it exploratory. Both strategies start from the same initial allocation at the evaluation boundary.")
 
-st.caption(f"Main backtest settings: Trace c = {c:g}, ε = {epsilon:g}.")
+st.caption("Run automatically calibrates c and ε before replaying the strategies.")
 if st.button("Run feasible-tuning backtest", type="primary"):
     try:
-        with st.spinner("Replaying the common comparison; the old method runs nested T validation each period..." if practical else "Comparing direct allocations through history..."):
-            result = _history(returns, settings, window, oos_start, rf, cost, cap, trading)
-        st.session_state["feasible_result"] = (signature, result)
+        cs = tuple(float(v.strip()) for v in cs_text.split(",") if v.strip())
+        eps = tuple(float(v.strip()) for v in eps_text.split(",") if v.strip())
+        with st.spinner("Selecting c and ε from past calibration data..."):
+            grid_result = _trace_grid(returns, settings, eps, cs, window, grid_start, grid_final, ppy, rf, cost, cap, trading, grid_end)
+        selected_settings = replace(settings, c=grid_result["selected_c"], epsilon=grid_result["selected_epsilon"])
+        with st.spinner("Replaying the strategies using the selected c and ε..."):
+            result = _history(returns, selected_settings, window, oos_start, rf, cost, cap, trading)
+        st.session_state["feasible_trace_grid_result"] = (grid_signature, grid_result)
+        st.session_state["feasible_result"] = (grid_signature, result, selected_settings)
+        st.rerun()
     except (ValueError, RuntimeError, np.linalg.LinAlgError) as exc:
         st.error(str(exc))
 
 saved = st.session_state.get("feasible_result")
-if saved is None or saved[0] != signature:
+if saved is None or saved[0] != grid_signature:
     st.stop()
-result = saved[1]
+result, settings = saved[1], saved[2]
+st.success(f"Automatically selected Trace settings: c = {settings.c:g}, ε = {settings.epsilon:g}.")
 st.subheader("Historical results")
 st.caption(f"{result['Date'].min().date()} to {result['Date'].max().date()}; all methods use the same evaluated periods. Returns cover the complete test.")
 summary, wealth = [], {}
