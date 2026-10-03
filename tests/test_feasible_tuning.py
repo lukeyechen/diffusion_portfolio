@@ -137,7 +137,9 @@ class FeasibleTuningTests(unittest.TestCase):
         final, _, raw = fit_portfolios(self.sample, self.settings, trading=trading,
                                        previous=previous, return_raw=True)
         u, h = moments(self.sample)
-        expected = np.linalg.solve(h, u) / self.settings.gamma
+        from core.portfolio_rules import compute_weights
+        expected = compute_weights("Mean-Variance", u, h, gamma=self.settings.gamma,
+                                   constraint_mode="Long-only", max_long_weight=trading.cap)
         np.testing.assert_allclose(raw["Classical (main sample)"], expected, atol=1e-10)
         pure_trading = TradingComparison(inner_folds=2, validation_size=5, min_train_size=20,
                                          cap=0.6, candidate_t=(0.0,), m=10, n_steps=10,
@@ -191,28 +193,31 @@ class FeasibleTuningTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 epsilon_sensitivity(frame, self.settings, invalid, **options)
 
-    def test_classical_closed_form_never_calls_allocation_optimizers(self):
+    def test_classical_respects_allocation_without_turnover_controls(self):
         from unittest.mock import patch
+        from core.portfolio_rules import compute_weights
+        from core.diffusion_exposure import allocate_exposure
         u, h = moments(self.sample)
-        expected = np.linalg.solve(h, u) / self.settings.gamma
         trading = TradingComparison(inner_folds=2, validation_size=5, min_train_size=20,
                                     cap=.6, turnover_penalty=.02, rebalance_alpha=.1)
-        with patch("core.feasible_tuning.solve_mv_turnover_aware", side_effect=AssertionError("optimizer called")), \
-             patch("core.feasible_tuning.allocate_exposure", side_effect=AssertionError("optimizer called")), \
-             patch("core.feasible_tuning.compute_weights", side_effect=AssertionError("optimizer called")):
+        with patch("core.feasible_tuning.solve_mv_turnover_aware", side_effect=AssertionError("turnover optimizer called")):
             portfolios, _, raw = fit_portfolios(self.sample, self.settings, trading=trading,
-                                                previous={"Classical (main sample)": np.array([.1, .9])},
                                                 methods=(), return_raw=True)
-            self.assertEqual(list(portfolios), ["Classical (main sample)"])
-            np.testing.assert_allclose(portfolios["Classical (main sample)"], expected)
-            np.testing.assert_allclose(raw["Classical (main sample)"], expected)
-            cash_portfolios, _ = fit_portfolios(self.sample, self.settings, cap=.01, methods=())
-            np.testing.assert_allclose(cash_portfolios["Classical (main sample)"], expected)
-
-    def test_classical_bankruptcy_is_reported_without_clipping_weights(self):
-        frame = pd.DataFrame(self.sample, index=pd.date_range("2020-01-03", periods=40, freq="W-FRI"), columns=["A", "B"])
-        with self.assertRaisesRegex(ValueError, "Classical MV exhausts its capital"):
-            historical_backtest(frame, self.settings, window=15, cap=.4)
+        expected = compute_weights("Mean-Variance", u, h, gamma=self.settings.gamma,
+                                   constraint_mode="Long-only", max_long_weight=.6)
+        np.testing.assert_allclose(portfolios["Classical (main sample)"], expected)
+        np.testing.assert_allclose(raw["Classical (main sample)"], expected)
+        for pilot in (None, self.sample):
+            cash, _ = fit_portfolios(self.sample, self.settings, cap=.01, pilot=pilot, methods=())
+            for w in cash.values():
+                self.assertTrue((w >= 0).all())
+                self.assertTrue((w <= .01).all())
+                self.assertLessEqual(w.sum(), 1 + 1e-7)
+        cash, _ = fit_portfolios(self.sample, self.settings, cap=.01, methods=())
+        np.testing.assert_allclose(cash["Classical (main sample)"],
+                                   allocate_exposure(u, h, gamma=self.settings.gamma, cap=.01))
+        unconstrained, _ = fit_portfolios(self.sample, self.settings, methods=())
+        np.testing.assert_allclose(unconstrained["Classical (main sample)"], np.linalg.solve(h, u)/self.settings.gamma)
 
 
 if __name__ == "__main__":

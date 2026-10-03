@@ -12,7 +12,7 @@ from core.diffusion_exposure import completed_yahoo_returns
 # rerun class identities and saved result signatures.
 import core.feasible_tuning as _feasible_module
 if (not hasattr(_feasible_module, "epsilon_sensitivity")
-        or getattr(_feasible_module, "CLASSICAL_MV_RULE", None) != "closed-form-unconstrained-v1"):
+        or getattr(_feasible_module, "CLASSICAL_MV_RULE", None) != "allocation-aware-classical-v2"):
     importlib.reload(_feasible_module)
 from core.feasible_tuning import (OLD_METHOD, TradingComparison, TuningSettings, coefficients,
                                  epsilon_sensitivity, gaussian_experiment, historical_backtest, latest_portfolios)
@@ -55,18 +55,21 @@ def _download(tickers, start, period):
 
 @st.cache_data(show_spinner=False)
 def _history(returns, settings, window, start, rf, cost, cap, trading):
+    # Allocation-aware Classical MV v2: invalidate pre-fix cached results.
     return historical_backtest(returns, settings, window=window,
                                oos_start=start, rf=rf, cost_bps=cost, cap=cap, trading=trading)
 
 
 @st.cache_data(show_spinner=False)
 def _latest(returns, settings, history, window, rf, cap, trading):
+    # Allocation-aware Classical MV v2.
     return latest_portfolios(returns, settings, history, window=window,
                              rf=rf, cap=cap, trading=trading, return_raw=True)
 
 
 @st.cache_data(show_spinner=False)
 def _epsilon(returns, settings, candidates, window, start, evaluation_start, ppy, rf, cost, cap, trading):
+    # Allocation-aware Classical MV v2.
     return epsilon_sensitivity(returns, settings, candidates, window=window,
                                calibration_start=start, evaluation_start=evaluation_start,
                                periods_per_year=ppy, rf=rf, cost_bps=cost, cap=cap, trading=trading)
@@ -94,7 +97,7 @@ st.info(
     "unconstrained, frictionless assumptions. A stock backtest, weight constraints and trading costs "
     "are empirical comparisons. This is unconditional portfolio tuning, separate from Diffusion OLS."
 )
-st.caption("Classical MV is the direct plug-in rule w = Σ̂⁻¹μ̂/γ. It has no tuning, weight cap, turnover optimizer or partial rebalance. Short positions and borrowing are possible. Realized trading costs are deducted separately in the backtest.")
+st.caption("Classical MV uses sample moments and respects the selected allocation constraints. It has no tuning, turnover penalty or partial rebalance. Theorem mode uses the unconstrained formula. Realized trading costs are deducted separately in the backtest.")
 
 shared = st.session_state.get("shared_current_window", {})
 has_shared = (isinstance(shared.get("full_returns"), pd.DataFrame)
@@ -234,7 +237,7 @@ oos_start = _input(st, "text_input", "Backtest / strategy replay start date", va
 cap = None
 trading = None
 if practical:
-    st.info("All methods use the same data, window, risk aversion and replay start. Classical MV uses its closed-form unconstrained weights. The other strategies share the displayed cap, turnover penalty and partial rebalance step. Each method replays its own holdings from equal weights. This comparison includes differences in trading controls as well as estimators.")
+    st.info("All methods use the same data, window, risk aversion and replay start. Classical MV uses the same fully invested long-only weight cap, without turnover penalties or partial rebalancing. The other strategies share the displayed cap, turnover penalty and partial rebalance step. Each method replays its own holdings from equal weights. This comparison includes differences in trading controls as well as estimators.")
     t1, t2, t3 = st.columns(3)
     cap = _input(t1, "number_input", "Maximum weight per stock", min_value=1.0/returns.shape[1], max_value=1.0,
                           value=max(1.0/returns.shape[1], float(defaults.get("max_long_weight", 0.4))),
@@ -266,7 +269,7 @@ if allocation.startswith("Long-only"):
 elif not practical:
     st.caption("Unconstrained weights can be negative or sum above 100%; cash can represent borrowing. They are not normalized to a fully invested long-only portfolio.")
 
-signature = (returns.to_json(), settings, window, oos_start, rf, cost, cap, trading)
+signature = (_feasible_module.CLASSICAL_MV_RULE, returns.to_json(), settings, window, oos_start, rf, cost, cap, trading)
 if st.button("Run feasible-tuning backtest", type="primary"):
     try:
         with st.spinner("Replaying the common comparison; the old method runs nested T validation each period..." if practical else "Comparing direct allocations through history..."):
@@ -336,7 +339,7 @@ if practical:
 try:
     latest, tuning, raw_targets = _latest(returns, settings, result, window, rf, cap, trading)
     st.subheader("Raw optimal targets — before turnover control")
-    st.caption("Classical MV uses the direct unconstrained formula in both tables. The other raw targets retain their weight constraints but have no turnover penalty or partial rebalance. Classical MV matches Portfolio's Classical MV when the shared settings are enabled.")
+    st.caption("Classical MV respects the selected allocation constraints in both tables. The other raw targets retain their weight constraints but have no turnover penalty or partial rebalance. Classical MV matches Portfolio's Classical MV when the shared settings are enabled.")
     raw_table = _weight_table(raw_targets, returns.columns, False)
     raw_table["Method"] = raw_table["Method"].replace({"Classical (main sample)": "Classical MV"})
     st.dataframe(raw_table.style.format({k: "{:.4%}" for k in [*returns.columns, "Cash"]}), hide_index=True, use_container_width=True)
