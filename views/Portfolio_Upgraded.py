@@ -332,6 +332,7 @@ if run:
         "turnover_penalty": float(turnover_penalty),
         "rebalance_alpha": float(rebalance_alpha),
         "max_long_weight": float(max_long_weight),
+        "replay_start": replay_start,
         "mu_hist": np.asarray(mu_h, dtype=float),
         "sigma_hist": np.asarray(sigma_h, dtype=float),
         "w_classical": np.asarray(w_classical, dtype=float),
@@ -469,6 +470,8 @@ st.session_state["shared_current_window"] = {
     "full_returns": res["returns"].copy(),
     "window_returns": res["returns"].iloc[-int(res["cfg"]["lookback"]):].copy(),
     "lookback": int(res["cfg"]["lookback"]),
+    "validation_config": dict(res["cfg"]),
+    "replay_start": res.get("replay_start"),
     "periods_per_year": int(res["cfg"]["periods_per_year"]),
     "gamma": float(res["gamma"]),
     "portfolio_rule": "Mean-Variance",
@@ -489,6 +492,7 @@ st.session_state["shared_current_window"] = {
     "mu_used": mu_used.copy(),
     "sigma_used": sigma_used.copy(),
     "weights": w.copy(),
+    "classical_weights": np.asarray(res["w_classical"], dtype=float).copy(),
     "weights_by_asset": {a: float(v) for a, v in zip(assets, w)},
 }
 
