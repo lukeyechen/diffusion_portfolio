@@ -65,6 +65,7 @@ def test_historical_controls_and_results_without_live_download():
     allocation.set_value("Long-only with cash (empirical comparison)").run()
     window = next(item for item in app.number_input if item.label == "Main estimation window")
     window.set_value(120).run()
+    _field(app, "text_input", "Backtest / strategy replay start date").set_value("2019-01-01").run()
     run = next(item for item in app.button if item.label == "Run feasible-tuning backtest")
     run.click().run(timeout=30)
     assert not app.exception
@@ -133,6 +134,7 @@ def test_historical_results_survive_navigation_and_new_portfolio_snapshot():
     app.run()
     _field(app, "radio", "Allocation").set_value("Long-only with cash (empirical comparison)").run()
     _field(app, "number_input", "Main estimation window").set_value(120).run()
+    _field(app, "text_input", "Backtest / strategy replay start date").set_value("2019-01-01").run()
     _field(app, "number_input", "Risk aversion γ").set_value(2.4).run()
     _field(app, "number_input", "Trace c (0 < c ≤ 4)").set_value(3.0).run()
     _field(app, "number_input", "Trading cost (bps per turnover)").set_value(10.0).run()
@@ -186,6 +188,7 @@ def test_uploaded_data_and_results_survive_navigation():
     _field(app, "radio", "Data source").set_value("Upload CSV").run()
     _field(app, "radio", "Allocation").set_value("Long-only with cash (empirical comparison)").run()
     _field(app, "number_input", "Main estimation window").set_value(120).run()
+    _field(app, "text_input", "Backtest / strategy replay start date").set_value("2019-01-01").run()
     _field(app, "button", "Run feasible-tuning backtest").click().run(timeout=30)
     assert not app.exception
     assert not app.error
@@ -222,6 +225,7 @@ def test_epsilon_experiment_survives_navigation_and_leaves_main_setting_unchange
     app.run()
     _field(app, "radio", "Allocation").set_value("Long-only with cash (empirical comparison)").run()
     _field(app, "number_input", "Main estimation window").set_value(120).run()
+    _field(app, "text_input", "Backtest / strategy replay start date").set_value("2019-01-01").run()
     _field(app, "text_input", "Positive ε candidates (maximum 12)").set_value("0.001,0.25").run()
     _field(app, "text_input", "Final evaluation starts").set_value(str(returns.index[220].date())).run()
     _field(app, "button", "Run ε calibration and final evaluation").click().run(timeout=30)
@@ -261,6 +265,7 @@ def test_c_calibration_and_joint_results_survive_navigation():
     app.run()
     _field(app, "radio", "Allocation").set_value("Long-only with cash (empirical comparison)").run()
     _field(app, "number_input", "Main estimation window").set_value(120).run()
+    _field(app, "text_input", "Backtest / strategy replay start date").set_value("2019-01-01").run()
     assert _field(app, "text_input", "c calibration starts").value == "2000-01-01"
     from datetime import datetime
     from zoneinfo import ZoneInfo
@@ -291,3 +296,14 @@ def test_c_calibration_and_joint_results_survive_navigation():
     _field(app, "text_input", "c candidates (0 < c ≤ 4; maximum 12)").set_value("5").run()
     _field(app, "button", "Run c calibration and final evaluation").click().run(timeout=30)
     assert app.error and not app.exception
+
+
+def test_replay_default_is_six_calendar_months_before_today():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    app = AppTest.from_file(PAGE)
+    returns = _returns()
+    app.session_state["feasible_data"] = ((tuple(returns.columns), "2000-01-01", "1 week"), returns)
+    app.run()
+    expected = (pd.Timestamp(datetime.now(ZoneInfo("America/Havana")).date()) - pd.DateOffset(months=6)).date().isoformat()
+    assert _field(app, "text_input", "Backtest / strategy replay start date").value == expected
