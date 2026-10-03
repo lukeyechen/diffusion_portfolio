@@ -86,7 +86,9 @@ class _FeasibleTuningPageState extends State<FeasibleTuningPage> {
   Widget _table(String title, dynamic value, {bool percent = false}) {
     final rows = (value as List).cast<Map<String, dynamic>>();
     if (rows.isEmpty) return const SizedBox.shrink();
-    final columns = rows.first.keys.toList();
+    final columns = rows.first.keys.where((key) =>
+      title != 'Latest tuning values' ||
+      !['a', 'Effective b = n a'].contains(key)).toList();
     String display(String key, dynamic v) {
       if (v == null) return '—';
       if (v is num) {

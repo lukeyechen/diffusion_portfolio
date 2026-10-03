@@ -253,7 +253,7 @@ def test_feasible_trace_matches_shared_engine_and_excludes_removed_methods(monke
     assert {row["Method"] for row in result["summary"]} == {
         "Classical MV", "Trace tuning", "Old Portfolio (Best-T + turnover control)"
     }
-    assert "a cap active" not in result["tuning"][0]
+    assert not {"a cap active", "a", "Effective b = n a"} & result["tuning"][0].keys()
     trace = next(row for row in result["tuning"] if row["Method"] == "Trace tuning")
     assert trace["Trace c"] == result["selected_c"]
     assert trace["Trace ε"] == result["selected_epsilon"]
