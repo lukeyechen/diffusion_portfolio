@@ -323,7 +323,25 @@ def test_calibration_apply_and_fixed_b_are_independent():
     assert not app.exception and not app.error
     _field(app, "button", "Apply selected c and ε to main backtest").click().run()
     assert _field(app, "number_input", "Trace c (0 < c ≤ 4)").value == .25
-    assert _field(app, "number_input", "Fixed b comparator").value == 7
+    assert not any(item.label == "Fixed b comparator" for item in app.number_input)
     assert len(app.expander) == 2  # rules and the single calibration panel
     buttons = [item.label for item in app.button]
     assert buttons.index("Run c calibration and final evaluation") < buttons.index("Run feasible-tuning backtest")
+
+
+def test_trace_c_precision_and_latest_noise_labels():
+    app = AppTest.from_file(PAGE)
+    returns = _returns()
+    app.session_state["feasible_data"] = ((tuple(returns.columns), "2000-01-01", "1 week"), returns)
+    app.run()
+    _field(app, "radio", "Allocation").set_value("Long-only with cash (empirical comparison)").run()
+    _field(app, "number_input", "Main estimation window").set_value(120).run()
+    _field(app, "text_input", "Backtest / strategy replay start date").set_value("2019-01-01").run()
+    _field(app, "number_input", "Trace c (0 < c ≤ 4)").set_value(.025).run()
+    _field(app, "button", "Run feasible-tuning backtest").click().run(timeout=30)
+    assert not app.exception and not app.error
+    tuning = next(item.value for item in app.dataframe if "Trace c" in item.value.columns).set_index("Method")
+    assert tuning.loc["Trace tuning", "Trace c"] == .025
+    assert tuning.loc["Fixed b", "b (noise level)"] == .025
+    assert pd.isna(tuning.loc["Fixed b", "Trace c"])
+    assert tuning.loc["Trace tuning", "b (noise level)"] != 7

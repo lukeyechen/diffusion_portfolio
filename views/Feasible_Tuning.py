@@ -131,12 +131,13 @@ gamma = _input(s1, "number_input", "Risk aversion γ", min_value=0.01,
                         value=1.0 if experiment == "Gaussian theorem check" else float(defaults.get("gamma", 3.0)),
                         sync=use_shared, disabled=use_shared,
                         key="feasible_gamma_" + experiment + str(use_shared))
-c = _input(s2, "number_input", "Trace c (0 < c ≤ 4)", min_value=0.01, max_value=4.0, value=4.0, key="trace_c")
+c = _input(s2, "number_input", "Trace c (0 < c ≤ 4)", min_value=0.000001, max_value=4.0, value=4.0, step=0.001, format="%.6f", key="trace_c")
 epsilon = _input(s3, "number_input", "Trace ε", min_value=0.000001, value=0.25, format="%.6f", key="trace_epsilon",
                           help="Positive variance-scale constant chosen before using the main sample.")
 s4, s5, s6, s7 = st.columns(4)
 a_max = _input(s4, "number_input", "Maximum a", min_value=0.01, max_value=0.999, value=0.95, key="a_max")
-fixed_b = _input(s5, "number_input", "Fixed b comparator", min_value=0.001, value=7.0, key="fixed_b", help="Independent fixed-b benchmark. Trace c and ε control only the Trace tuning method.")
+fixed_b = c
+s5.caption(f"Fixed b comparator follows Trace c: b = {fixed_b:.6g}")
 b_min = _input(s6, "number_input", "Ratio b lower bound", min_value=0.001, value=1.0, key="b_min")
 b_max = _input(s7, "number_input", "Ratio b upper bound", min_value=0.002, value=20.0, key="b_max")
 settings = TuningSettings(gamma=gamma, c=c, epsilon=epsilon, a_max=a_max,
@@ -333,7 +334,7 @@ with st.expander("Trace calibration: c, ε, or both"):
         st.line_chart(pd.DataFrame({_label(name, practical): pd.Series(np.cumprod(1+group["Net return"].to_numpy()), index=group["Date"]) for name, group in grid_history.groupby("Method", sort=False)}))
         st.caption("Choose grids and dates before examining final results. Repeated selection using the final period makes it exploratory. Both strategies start from the same initial allocation at the evaluation boundary.")
 
-st.caption(f"Main backtest settings: Trace c = {c:g}, ε = {epsilon:g}; Fixed b comparator = {fixed_b:g}. Changing c affects Trace tuning only. Change Fixed b comparator above to change that separate method.")
+st.caption(f"Main backtest settings: Trace c = {c:g}, ε = {epsilon:g}; Fixed b comparator = {fixed_b:g}. Fixed b is linked to Trace c: changing c also changes the Fixed b comparator.")
 if st.button("Run feasible-tuning backtest", type="primary"):
     try:
         with st.spinner("Replaying the common comparison; the old method runs nested T validation each period..." if practical else "Comparing direct allocations through history..."):
@@ -389,7 +390,15 @@ try:
         else:
             st.warning("The saved Portfolio comparison does not match. Rerun Portfolio and this comparison with the complete saved settings before interpreting the differences.")
     st.subheader("Latest tuning values")
-    st.dataframe(tuning, hide_index=True, use_container_width=True)
+    tuning_display = tuning.copy()
+    trace_rows = tuning_display["Method"] == "Trace tuning"
+    tuning_display.insert(1, "Trace c", np.where(trace_rows, settings.c, np.nan))
+    tuning_display.insert(2, "Trace ε", np.where(trace_rows, settings.epsilon, np.nan))
+    tuning_display = tuning_display.rename(columns={"b": "b (noise level)"})
+    st.caption(f"Trace tuning uses c = {settings.c:.6g}, ε = {settings.epsilon:.6g}, and b = c / (ε + tr(Σ̂)). Fixed b is linked to your Trace c input and uses b = {settings.fixed_b:.6g}.")
+    st.dataframe(tuning_display.style.format({"Trace c": "{:.6g}", "Trace ε": "{:.6g}",
+                                            "b (noise level)": "{:.6g}"}, na_rep="—"),
+                 hide_index=True, use_container_width=True)
     st.caption("An active a cap changes the finite-sample rule. For sufficiently large n the cap becomes inactive under the bounded rules.")
 except (ValueError, RuntimeError, np.linalg.LinAlgError) as exc:
     st.error(str(exc))
