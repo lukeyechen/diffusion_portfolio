@@ -193,6 +193,26 @@ class FeasibleTuningTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 epsilon_sensitivity(frame, self.settings, invalid, **options)
 
+    def test_joint_calibration_freezes_pair_without_future_leakage(self):
+        from core.feasible_tuning import trace_calibration
+        frame = pd.DataFrame(self.sample, index=pd.date_range("2020-01-03", periods=40, freq="W-FRI"), columns=["A", "B"])
+        options = dict(window=15, calibration_start="2020-01-01",
+                       evaluation_start=str(frame.index[30].date()), periods_per_year=52, cap=.4)
+        result = trace_calibration(frame, self.settings, [.01, .25], cs=[1, 4], **options)
+        changed = frame.copy()
+        changed.iloc[30:] = [.2, -.1]
+        other = trace_calibration(changed, self.settings, [.01, .25], cs=[1, 4], **options)
+        pd.testing.assert_frame_equal(result["calibration"], other["calibration"])
+        self.assertEqual(result["selected_c"], other["selected_c"])
+        self.assertEqual(result["selected_epsilon"], other["selected_epsilon"])
+        self.assertEqual(len(result["calibration"]), 4)
+        winner = result["calibration"].loc[result["calibration"]["Annualized MV excess"].idxmax()]
+        self.assertEqual(result["selected_c"], winner["c"])
+        self.assertEqual(result["selected_epsilon"], winner["ε"])
+        for cs in ([], [0], [5], [np.nan], list(np.linspace(.1, 4, 13))):
+            with self.assertRaises(ValueError):
+                trace_calibration(frame, self.settings, [.25], cs=cs, **options)
+
     def test_classical_respects_allocation_without_turnover_controls(self):
         from unittest.mock import patch
         from core.portfolio_rules import compute_weights

@@ -11,11 +11,12 @@ from core.diffusion_exposure import completed_yahoo_returns
 # deployment. Refresh it only when the new export is missing, preserving normal
 # rerun class identities and saved result signatures.
 import core.feasible_tuning as _feasible_module
-if (not hasattr(_feasible_module, "epsilon_sensitivity")
+if (not hasattr(_feasible_module, "trace_calibration")
+        or not hasattr(_feasible_module, "epsilon_sensitivity")
         or getattr(_feasible_module, "CLASSICAL_MV_RULE", None) != "allocation-aware-classical-v2"):
     importlib.reload(_feasible_module)
 from core.feasible_tuning import (OLD_METHOD, TradingComparison, TuningSettings, coefficients,
-                                 epsilon_sensitivity, gaussian_experiment, historical_backtest, latest_portfolios)
+                                 epsilon_sensitivity, trace_calibration, gaussian_experiment, historical_backtest, latest_portfolios)
 from core.short_horizon_portfolio import CANDIDATE_T, HORIZON_PRESETS, aggregate_nonoverlapping, get_horizon_preset, performance_metrics
 
 
@@ -73,6 +74,13 @@ def _epsilon(returns, settings, candidates, window, start, evaluation_start, ppy
     return epsilon_sensitivity(returns, settings, candidates, window=window,
                                calibration_start=start, evaluation_start=evaluation_start,
                                periods_per_year=ppy, rf=rf, cost_bps=cost, cap=cap, trading=trading)
+
+
+@st.cache_data(show_spinner=False)
+def _trace_grid(returns, settings, epsilons, cs, window, start, evaluation_start, ppy, rf, cost, cap, trading):
+    return trace_calibration(returns, settings, epsilons, cs=cs, window=window,
+                             calibration_start=start, evaluation_start=evaluation_start,
+                             periods_per_year=ppy, rf=rf, cost_bps=cost, cap=cap, trading=trading)
 
 
 def _label(name, practical):
@@ -311,6 +319,38 @@ with st.expander("ε sensitivity: calibration and final evaluation"):
                    for name, group in final.groupby("Method", sort=False)}
         st.line_chart(pd.DataFrame(wealth))
         st.caption(f"Final evaluation: {final['Date'].min().date()} to {final['Date'].max().date()}. Both strategies start from the same initial allocation at this boundary.")
+with st.expander("c calibration and joint c–ε calibration"):
+    st.caption("Select c alone with the main ε fixed, or search both jointly. Select by net annualized MV excess on past calibration data, then freeze both values for a later evaluation. Main backtest settings stay unchanged. Ties select the first pair in candidate order.")
+    grid_mode = _input(st, "radio", "Trace calibration mode", options=["c only (fixed ε)", "Joint c and ε"], key="trace_grid_mode")
+    cs_text = _input(st, "text_input", "c candidates (0 < c ≤ 4; maximum 12)", value="0.25,0.5,1,1.5,2,2.5,3,3.5,4", key="trace_cs")
+    eps_text = _input(st, "text_input", "Joint ε candidates (maximum 12)", value="0.001,0.005,0.01,0.05,0.10,0.25", key="trace_eps", disabled=grid_mode.startswith("c only"))
+    grid_start = _input(st, "text_input", "c calibration starts", value=oos_start, key="trace_start")
+    grid_final = _input(st, "text_input", "c final evaluation starts", value=default_final, key="trace_final")
+    grid_signature = (signature, grid_mode, cs_text, eps_text, grid_start, grid_final, ppy)
+    if st.button("Run c calibration and final evaluation"):
+        try:
+            cs = tuple(float(v.strip()) for v in cs_text.split(",") if v.strip())
+            eps = (settings.epsilon,) if grid_mode.startswith("c only") else tuple(float(v.strip()) for v in eps_text.split(",") if v.strip())
+            with st.spinner("Calibrating trace settings on past data, then evaluating the frozen pair..."):
+                grid_result = _trace_grid(returns, settings, eps, cs, window, grid_start, grid_final, ppy, rf, cost, cap, trading)
+            st.session_state["feasible_trace_grid_result"] = (grid_signature, grid_result)
+        except (ValueError, RuntimeError, np.linalg.LinAlgError) as exc:
+            st.error(str(exc))
+    saved_grid = st.session_state.get("feasible_trace_grid_result")
+    if saved_grid is not None and saved_grid[0] == grid_signature:
+        grid_result = saved_grid[1]
+        st.write(f"Frozen c: {grid_result['selected_c']:g}; frozen ε: {grid_result['selected_epsilon']:g}. Calibration through {pd.Timestamp(grid_result['calibration_through']).date()}.")
+        st.write("c calibration results")
+        grid_formats = {k: "{:.3%}" for k in grid_result["calibration"].columns if k not in ("c", "ε", "Periods")}
+        st.dataframe(grid_result["calibration"].style.format(grid_formats), hide_index=True, use_container_width=True)
+        st.write("Final evaluation: frozen c–ε pair versus Classical MV")
+        grid_table = grid_result["evaluation_summary"].copy()
+        grid_table["Method"] = grid_table["Method"].map(lambda name: _label(name, practical))
+        st.dataframe(grid_table.style.format(grid_formats), hide_index=True, use_container_width=True)
+        grid_history = grid_result["evaluation"]
+        st.line_chart(pd.DataFrame({_label(name, practical): pd.Series(np.cumprod(1+group["Net return"].to_numpy()), index=group["Date"]) for name, group in grid_history.groupby("Method", sort=False)}))
+        st.caption("Choose grids and dates before examining final results. Repeated selection using the final period makes it exploratory. Both strategies start from the same initial allocation at the evaluation boundary.")
+
 saved = st.session_state.get("feasible_result")
 if saved is None or saved[0] != signature:
     st.stop()

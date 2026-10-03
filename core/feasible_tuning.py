@@ -334,10 +334,10 @@ def latest_portfolios(returns, settings, history, *, window, rf=0.0, cap=None, t
                           cap=cap, trading=trading, previous=previous, return_raw=return_raw)
 
 
-def epsilon_sensitivity(returns, settings, epsilons, *, window, calibration_start,
+def trace_calibration(returns, settings, epsilons, *, cs=None, window, calibration_start,
                         evaluation_start, periods_per_year, rf=0.0, cost_bps=0.0,
                         cap=None, trading=None):
-    """Choose epsilon on past calibration only, then freeze it for a held-out replay.
+    """Choose c and epsilon on past calibration only, then freeze for a held-out replay.
 
     No old nested-T calculation is needed for this trace-versus-classical experiment.
     The final evaluation starts both strategies from the same initial holdings.
@@ -345,6 +345,9 @@ def epsilon_sensitivity(returns, settings, epsilons, *, window, calibration_star
     grid = tuple(dict.fromkeys(float(e) for e in epsilons))
     if not grid or len(grid) > 12 or not np.isfinite(grid).all() or min(grid) <= 0:
         raise ValueError("Enter 1–12 finite, positive epsilon candidates.")
+    c_grid = (settings.c,) if cs is None else tuple(dict.fromkeys(float(c) for c in cs))
+    if not c_grid or len(c_grid) > 12 or not np.isfinite(c_grid).all() or min(c_grid) <= 0 or max(c_grid) > 4:
+        raise ValueError("Enter 1–12 finite c candidates with 0 < c ≤ 4.")
     cutoff = pd.Timestamp(evaluation_start)
     if pd.Timestamp(calibration_start) >= cutoff:
         raise ValueError("Calibration must start before the final evaluation.")
@@ -364,21 +367,31 @@ def epsilon_sensitivity(returns, settings, epsilons, *, window, calibration_star
                 "Average turnover": group["Turnover"].mean()}
 
     rows = []
-    for epsilon in grid:
-        candidate = replace(settings, epsilon=epsilon)
-        history = historical_backtest(calibration_data, candidate, window=window,
-                                      oos_start=calibration_start, rf=rf, cost_bps=cost_bps,
-                                      cap=cap, trading=trading, methods=methods)
-        trace = history[history["Method"] == "Trace tuning"]
-        rows.append({"ε": epsilon, **summarize(trace)})
+    for c in c_grid:
+        for epsilon in grid:
+            candidate = replace(settings, c=c, epsilon=epsilon)
+            history = historical_backtest(calibration_data, candidate, window=window,
+                                          oos_start=calibration_start, rf=rf, cost_bps=cost_bps,
+                                          cap=cap, trading=trading, methods=methods)
+            trace = history[history["Method"] == "Trace tuning"]
+            rows.append({"c": c, "ε": epsilon, **summarize(trace)})
     calibration = pd.DataFrame(rows)
-    selected = float(calibration.loc[calibration["Annualized MV excess"].idxmax(), "ε"])
-    frozen = replace(settings, epsilon=selected)
+    winner = calibration.loc[calibration["Annualized MV excess"].idxmax()]
+    selected = float(winner["ε"])
+    selected_c = float(winner["c"])
+    frozen = replace(settings, c=selected_c, epsilon=selected)
     evaluation = historical_backtest(returns, frozen, window=window,
                                      oos_start=evaluation_start, rf=rf, cost_bps=cost_bps,
                                      cap=cap, trading=trading, methods=methods)
     summary = pd.DataFrame([{"Method": method, **summarize(group)}
                             for method, group in evaluation.groupby("Method", sort=False)])
-    return dict(calibration=calibration, selected_epsilon=selected,
+    return dict(calibration=calibration, selected_epsilon=selected, selected_c=selected_c,
                 calibration_through=calibration_data.index[-1],
                 evaluation_summary=summary, evaluation=evaluation)
+
+
+def epsilon_sensitivity(returns, settings, epsilons, **kwargs):
+    """Calibrate epsilon while keeping c fixed (existing experiment)."""
+    result = trace_calibration(returns, settings, epsilons, **kwargs)
+    result["calibration"] = result["calibration"].drop(columns="c")
+    return result
