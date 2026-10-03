@@ -226,9 +226,10 @@ def test_epsilon_experiment_survives_navigation_and_leaves_main_setting_unchange
     _field(app, "radio", "Allocation").set_value("Long-only with cash (empirical comparison)").run()
     _field(app, "number_input", "Main estimation window").set_value(120).run()
     _field(app, "text_input", "Backtest / strategy replay start date").set_value("2019-01-01").run()
-    _field(app, "text_input", "Positive ε candidates (maximum 12)").set_value("0.001,0.25").run()
-    _field(app, "text_input", "Final evaluation starts").set_value(str(returns.index[220].date())).run()
-    _field(app, "button", "Run ε calibration and final evaluation").click().run(timeout=30)
+    _field(app, "radio", "Trace calibration mode").set_value("ε only (fixed c)").run()
+    _field(app, "text_input", "Joint ε candidates (maximum 12)").set_value("0.001,0.25").run()
+    _field(app, "text_input", "c final evaluation starts").set_value(str(returns.index[220].date())).run()
+    _field(app, "button", "Run c calibration and final evaluation").click().run(timeout=30)
     assert not app.exception
     assert not app.error
     assert len(app.dataframe) == 2
@@ -307,3 +308,22 @@ def test_replay_default_is_six_calendar_months_before_today():
     app.run()
     expected = (pd.Timestamp(datetime.now(ZoneInfo("America/Havana")).date()) - pd.DateOffset(months=6)).date().isoformat()
     assert _field(app, "text_input", "Backtest / strategy replay start date").value == expected
+
+
+def test_calibration_apply_and_fixed_b_are_independent():
+    app = AppTest.from_file(PAGE)
+    returns = _returns()
+    app.session_state["feasible_data"] = ((tuple(returns.columns), "2000-01-01", "1 week"), returns)
+    app.run()
+    _field(app, "radio", "Allocation").set_value("Long-only with cash (empirical comparison)").run()
+    _field(app, "number_input", "Main estimation window").set_value(120).run()
+    _field(app, "text_input", "c candidates (0 < c ≤ 4; maximum 12)").set_value(".25").run()
+    _field(app, "text_input", "c final evaluation starts").set_value(str(returns.index[220].date())).run()
+    _field(app, "button", "Run c calibration and final evaluation").click().run(timeout=30)
+    assert not app.exception and not app.error
+    _field(app, "button", "Apply selected c and ε to main backtest").click().run()
+    assert _field(app, "number_input", "Trace c (0 < c ≤ 4)").value == .25
+    assert _field(app, "number_input", "Fixed b comparator").value == 7
+    assert len(app.expander) == 2  # rules and the single calibration panel
+    buttons = [item.label for item in app.button]
+    assert buttons.index("Run c calibration and final evaluation") < buttons.index("Run feasible-tuning backtest")

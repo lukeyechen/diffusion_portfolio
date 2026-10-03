@@ -23,6 +23,12 @@ from core.feasible_tuning import (OLD_METHOD, TradingComparison, TuningSettings,
 from core.short_horizon_portfolio import CANDIDATE_T, HORIZON_PRESETS, aggregate_nonoverlapping, get_horizon_preset, performance_metrics
 
 
+def _apply_trace_settings(c, epsilon):
+    for name, value in (("trace_c", c), ("trace_epsilon", epsilon)):
+        st.session_state.setdefault("feasible_inputs", {})[name] = float(value)
+        st.session_state["_feasible_widget_" + name] = float(value)
+
+
 def _remember_input(name, widget_key):
     st.session_state.setdefault("feasible_inputs", {})[name] = st.session_state[widget_key]
 
@@ -130,7 +136,7 @@ epsilon = _input(s3, "number_input", "Trace ε", min_value=0.000001, value=0.25,
                           help="Positive variance-scale constant chosen before using the main sample.")
 s4, s5, s6, s7 = st.columns(4)
 a_max = _input(s4, "number_input", "Maximum a", min_value=0.01, max_value=0.999, value=0.95, key="a_max")
-fixed_b = _input(s5, "number_input", "Fixed b comparator", min_value=0.001, value=7.0, key="fixed_b")
+fixed_b = _input(s5, "number_input", "Fixed b comparator", min_value=0.001, value=7.0, key="fixed_b", help="Independent fixed-b benchmark. Trace c and ε control only the Trace tuning method.")
 b_min = _input(s6, "number_input", "Ratio b lower bound", min_value=0.001, value=1.0, key="b_min")
 b_max = _input(s7, "number_input", "Ratio b upper bound", min_value=0.002, value=20.0, key="b_max")
 settings = TuningSettings(gamma=gamma, c=c, epsilon=epsilon, a_max=a_max,
@@ -282,59 +288,16 @@ elif not practical:
     st.caption("Unconstrained weights can be negative or sum above 100%; cash can represent borrowing. They are not normalized to a fully invested long-only portfolio.")
 
 signature = (_feasible_module.CLASSICAL_MV_RULE, returns.to_json(), settings, window, oos_start, rf, cost, cap, trading)
-if st.button("Run feasible-tuning backtest", type="primary"):
-    try:
-        with st.spinner("Replaying the common comparison; the old method runs nested T validation each period..." if practical else "Comparing direct allocations through history..."):
-            result = _history(returns, settings, window, oos_start, rf, cost, cap, trading)
-        st.session_state["feasible_result"] = (signature, result)
-    except (ValueError, RuntimeError, np.linalg.LinAlgError) as exc:
-        st.error(str(exc))
-
 history_default = str(pd.Timestamp(returns.index[0]).date()) if use_shared else start
 today_default = datetime.now(ZoneInfo("America/Havana")).date().isoformat()
 
-with st.expander("ε sensitivity: calibration and final evaluation"):
-    st.caption("Candidates are compared on the earlier calibration period using net annualized mean–variance excess. The winner is frozen for the later evaluation. This experiment does not change the main backtest's ε. Choose the dates and candidate grid before examining final results; repeated tuning on the final period makes it exploratory.")
-    candidates_text = _input(st, "text_input", "Positive ε candidates (maximum 12)", value="0.0001,0.001,0.01,0.05,0.25", key="epsilon_candidates")
-    calibration_start = _input(st, "text_input", "Calibration starts", value=history_default, key="calibration_start")
-    eligible_dates = returns.index[window:]
-    default_final = str(pd.Timestamp(eligible_dates[int(0.8*len(eligible_dates))]).date()) if len(eligible_dates) else oos_start
-    evaluation_start = _input(st, "text_input", "Final evaluation starts", value=default_final, key="evaluation_start")
-    epsilon_end = _input(st, "text_input", "Calibration / evaluation end date", value=today_default, key="epsilon_end")
-    epsilon_signature = (signature, candidates_text, calibration_start, evaluation_start, ppy, epsilon_end)
-    if st.button("Run ε calibration and final evaluation"):
-        try:
-            candidates = tuple(float(e.strip()) for e in candidates_text.split(",") if e.strip())
-            with st.spinner("Calibrating ε on past data, then evaluating the frozen choice..."):
-                sensitivity = _epsilon(returns, settings, candidates, window, calibration_start,
-                                       evaluation_start, ppy, rf, cost, cap, trading, epsilon_end)
-            st.session_state["feasible_epsilon_result"] = (epsilon_signature, sensitivity)
-        except (ValueError, RuntimeError, np.linalg.LinAlgError) as exc:
-            st.error(str(exc))
-    saved_epsilon = st.session_state.get("feasible_epsilon_result")
-    if saved_epsilon is not None and saved_epsilon[0] == epsilon_signature:
-        sensitivity = saved_epsilon[1]
-        st.write(f"Frozen ε: {sensitivity['selected_epsilon']:g}. Calibration through {pd.Timestamp(sensitivity['calibration_through']).date()}.")
-        st.write("Calibration results")
-        formats = {k: "{:.3%}" for k in sensitivity["calibration"].columns if k not in ("ε", "Periods")}
-        st.dataframe(sensitivity["calibration"].style.format(formats), hide_index=True, use_container_width=True)
-        st.write("Final evaluation: frozen trace versus classical")
-        st.success(f"Selected calibration settings used below: c = {settings.c:g}, ε = {sensitivity['selected_epsilon']:g} (c held fixed).")
-        table = sensitivity["evaluation_summary"].copy()
-        table.insert(1, "Selected c", np.where(table["Method"] == "Trace tuning", settings.c, np.nan))
-        table.insert(2, "Selected ε", np.where(table["Method"] == "Trace tuning", sensitivity["selected_epsilon"], np.nan))
-        formats.update({"Selected c": "{:.6g}", "Selected ε": "{:.6g}"})
-        table["Method"] = table["Method"].map(lambda name: _label(name, practical))
-        st.dataframe(table.style.format(formats, na_rep="—"), hide_index=True, use_container_width=True)
-        final = sensitivity["evaluation"]
-        wealth = { _label(name, practical): pd.Series(np.cumprod(1+group["Net return"].to_numpy()), index=group["Date"])
-                   for name, group in final.groupby("Method", sort=False)}
-        st.line_chart(pd.DataFrame(wealth))
-        st.caption(f"Final evaluation: {final['Date'].min().date()} to {final['Date'].max().date()}. Both strategies start from the same initial allocation at this boundary.")
-with st.expander("c calibration and joint c–ε calibration"):
+eligible_dates = returns.index[window:]
+default_final = str(pd.Timestamp(eligible_dates[int(0.8*len(eligible_dates))]).date()) if len(eligible_dates) else oos_start
+
+with st.expander("Trace calibration: c, ε, or both"):
     st.caption("The end date defaults to today; only available completed return periods are used. Final evaluation starts is the earlier calibration/evaluation split. Select c alone with the main ε fixed, or search both jointly. Select by net annualized MV excess on past calibration data, then freeze both values for a later evaluation. Main backtest settings stay unchanged. Ties select the first pair in candidate order.")
-    grid_mode = _input(st, "radio", "Trace calibration mode", options=["c only (fixed ε)", "Joint c and ε"], key="trace_grid_mode")
-    cs_text = _input(st, "text_input", "c candidates (0 < c ≤ 4; maximum 12)", value="0.25,0.5,1,1.5,2,2.5,3,3.5,4", key="trace_cs")
+    grid_mode = _input(st, "radio", "Trace calibration mode", options=["c only (fixed ε)", "ε only (fixed c)", "Joint c and ε"], key="trace_grid_mode")
+    cs_text = _input(st, "text_input", "c candidates (0 < c ≤ 4; maximum 12)", value="0.25,0.5,1,1.5,2,2.5,3,3.5,4", key="trace_cs", disabled=grid_mode.startswith("ε only"))
     eps_text = _input(st, "text_input", "Joint ε candidates (maximum 12)", value="0.001,0.005,0.01,0.05,0.10,0.25", key="trace_eps", disabled=grid_mode.startswith("c only"))
     grid_start = _input(st, "text_input", "c calibration starts", value=history_default, key="trace_start")
     grid_final = _input(st, "text_input", "c final evaluation starts", value=default_final, key="trace_final")
@@ -342,7 +305,7 @@ with st.expander("c calibration and joint c–ε calibration"):
     grid_signature = (signature, grid_mode, cs_text, eps_text, grid_start, grid_final, ppy, grid_end)
     if st.button("Run c calibration and final evaluation"):
         try:
-            cs = tuple(float(v.strip()) for v in cs_text.split(",") if v.strip())
+            cs = (settings.c,) if grid_mode.startswith("ε only") else tuple(float(v.strip()) for v in cs_text.split(",") if v.strip())
             eps = (settings.epsilon,) if grid_mode.startswith("c only") else tuple(float(v.strip()) for v in eps_text.split(",") if v.strip())
             with st.spinner("Calibrating trace settings on past data, then evaluating the frozen pair..."):
                 grid_result = _trace_grid(returns, settings, eps, cs, window, grid_start, grid_final, ppy, rf, cost, cap, trading, grid_end)
@@ -353,6 +316,8 @@ with st.expander("c calibration and joint c–ε calibration"):
     if saved_grid is not None and saved_grid[0] == grid_signature:
         grid_result = saved_grid[1]
         st.write(f"Frozen c: {grid_result['selected_c']:g}; frozen ε: {grid_result['selected_epsilon']:g}. Calibration through {pd.Timestamp(grid_result['calibration_through']).date()}.")
+        st.button("Apply selected c and ε to main backtest", on_click=_apply_trace_settings,
+                  args=(grid_result["selected_c"], grid_result["selected_epsilon"]))
         st.write("c calibration results")
         grid_formats = {k: "{:.3%}" for k in grid_result["calibration"].columns if k not in ("c", "ε", "Periods")}
         st.dataframe(grid_result["calibration"].style.format(grid_formats), hide_index=True, use_container_width=True)
@@ -367,6 +332,15 @@ with st.expander("c calibration and joint c–ε calibration"):
         grid_history = grid_result["evaluation"]
         st.line_chart(pd.DataFrame({_label(name, practical): pd.Series(np.cumprod(1+group["Net return"].to_numpy()), index=group["Date"]) for name, group in grid_history.groupby("Method", sort=False)}))
         st.caption("Choose grids and dates before examining final results. Repeated selection using the final period makes it exploratory. Both strategies start from the same initial allocation at the evaluation boundary.")
+
+st.caption(f"Main backtest settings: Trace c = {c:g}, ε = {epsilon:g}; Fixed b comparator = {fixed_b:g}. Changing c affects Trace tuning only. Change Fixed b comparator above to change that separate method.")
+if st.button("Run feasible-tuning backtest", type="primary"):
+    try:
+        with st.spinner("Replaying the common comparison; the old method runs nested T validation each period..." if practical else "Comparing direct allocations through history..."):
+            result = _history(returns, settings, window, oos_start, rf, cost, cap, trading)
+        st.session_state["feasible_result"] = (signature, result)
+    except (ValueError, RuntimeError, np.linalg.LinAlgError) as exc:
+        st.error(str(exc))
 
 saved = st.session_state.get("feasible_result")
 if saved is None or saved[0] != signature:
