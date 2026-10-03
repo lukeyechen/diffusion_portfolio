@@ -57,7 +57,8 @@ class FeasibleTuningTests(unittest.TestCase):
         settings = TuningSettings(epsilon=0.00001, a_max=0.3)
         portfolios, diagnostic = fit_portfolios(self.sample, settings, cap=0.4)
         trace = diagnostic.set_index("Method").loc["Trace tuning"]
-        self.assertTrue(trace["a cap active"])
+        self.assertNotIn("a cap active", diagnostic.columns)
+        self.assertGreater(trace["b"] / len(self.sample), settings.a_max)
         self.assertAlmostEqual(trace["a"], 0.3)
         for name, w in portfolios.items():
             if name.startswith("Classical"):
