@@ -11,7 +11,8 @@ from core.diffusion_exposure import completed_yahoo_returns
 # deployment. Refresh it only when the new export is missing, preserving normal
 # rerun class identities and saved result signatures.
 import core.feasible_tuning as _feasible_module
-if not hasattr(_feasible_module, "epsilon_sensitivity"):
+if (not hasattr(_feasible_module, "epsilon_sensitivity")
+        or getattr(_feasible_module, "CLASSICAL_MV_RULE", None) != "closed-form-unconstrained-v1"):
     importlib.reload(_feasible_module)
 from core.feasible_tuning import (OLD_METHOD, TradingComparison, TuningSettings, coefficients,
                                  epsilon_sensitivity, gaussian_experiment, historical_backtest, latest_portfolios)
@@ -72,7 +73,7 @@ def _epsilon(returns, settings, candidates, window, start, evaluation_start, ppy
 
 
 def _label(name, practical):
-    return "Classical MV + turnover control" if practical and name == "Classical (main sample)" else name
+    return "Classical MV" if name == "Classical (main sample)" else name
 
 
 def _weight_table(portfolios, assets, practical):
@@ -93,6 +94,7 @@ st.info(
     "unconstrained, frictionless assumptions. A stock backtest, weight constraints and trading costs "
     "are empirical comparisons. This is unconditional portfolio tuning, separate from Diffusion OLS."
 )
+st.caption("Classical MV is the direct plug-in rule w = Σ̂⁻¹μ̂/γ. It has no tuning, weight cap, turnover optimizer or partial rebalance. Short positions and borrowing are possible. Realized trading costs are deducted separately in the backtest.")
 
 shared = st.session_state.get("shared_current_window", {})
 has_shared = (isinstance(shared.get("full_returns"), pd.DataFrame)
@@ -232,7 +234,7 @@ oos_start = _input(st, "text_input", "Backtest / strategy replay start date", va
 cap = None
 trading = None
 if practical:
-    st.info("All methods use the same window, risk aversion, fully invested weight cap, turnover penalty and partial rebalance step. Each method replays its own holdings from equal weights on the same start date. Trace, fixed b and ratio use direct endpoint moments; the old method keeps its original Best-T grid, finite-step moments and real/synthetic mixture. This trading comparison is empirical.")
+    st.info("All methods use the same data, window, risk aversion and replay start. Classical MV uses its closed-form unconstrained weights. The other strategies share the displayed cap, turnover penalty and partial rebalance step. Each method replays its own holdings from equal weights. This comparison includes differences in trading controls as well as estimators.")
     t1, t2, t3 = st.columns(3)
     cap = _input(t1, "number_input", "Maximum weight per stock", min_value=1.0/returns.shape[1], max_value=1.0,
                           value=max(1.0/returns.shape[1], float(defaults.get("max_long_weight", 0.4))),
@@ -334,11 +336,11 @@ if practical:
 try:
     latest, tuning, raw_targets = _latest(returns, settings, result, window, rf, cap, trading)
     st.subheader("Raw optimal targets — before turnover control")
-    st.caption("These targets use the same weight constraints, with no turnover penalty or partial rebalance. The raw Classical row is directly comparable to Portfolio's Classical MV when the shared settings are enabled.")
+    st.caption("Classical MV uses the direct unconstrained formula in both tables. The other raw targets retain their weight constraints but have no turnover penalty or partial rebalance. Classical MV matches Portfolio's Classical MV when the shared settings are enabled.")
     raw_table = _weight_table(raw_targets, returns.columns, False)
-    raw_table["Method"] = raw_table["Method"].replace({"Classical (main sample)": "Classical MV (raw)"})
+    raw_table["Method"] = raw_table["Method"].replace({"Classical (main sample)": "Classical MV"})
     st.dataframe(raw_table.style.format({k: "{:.4%}" for k in [*returns.columns, "Cash"]}), hide_index=True, use_container_width=True)
-    st.subheader("Final trading allocations — after turnover control" if practical else "Final allocations — no turnover control in this mode")
+    st.subheader("Final allocations — Classical MV stays unadjusted")
     st.caption(f"Common estimation block: {pd.Timestamp(returns.index[-window]).date()} to {pd.Timestamp(returns.index[-1]).date()}, n={window}, γ={gamma:g}. " + (f"Turnover penalty {penalty:g} bps, rebalance step {alpha:g}%, cap {cap:.0%}." if practical else "No turnover penalty or partial-rebalance adjustment to the targets."))
     st.dataframe(_weight_table(latest, returns.columns, practical).style.format({k: "{:.4%}" for k in [*returns.columns,"Cash"]}), hide_index=True, use_container_width=True)
     if use_shared and "weights" in shared and "classical_weights" in shared:
