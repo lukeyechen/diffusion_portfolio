@@ -3,8 +3,10 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from core.feasible_tuning import (TuningSettings, coefficients, endpoint_moments,
-                                 fit_portfolios, historical_backtest, moments)
+from core.feasible_tuning import (OLD_METHOD, TradingComparison, TuningSettings,
+                                 coefficients, endpoint_moments, fit_portfolios,
+                                 historical_backtest, latest_portfolios, moments)
+from core.short_horizon_portfolio import replay_latest_recommendation
 
 
 class FeasibleTuningTests(unittest.TestCase):
@@ -78,6 +80,49 @@ class FeasibleTuningTests(unittest.TestCase):
                                    changed[["Weight A", "Weight B"]])
         np.testing.assert_allclose(original["Gross return"]-original["Net return"],
                                    0.0025*original["Turnover"])
+
+
+    def test_old_comparator_matches_existing_portfolio_replay(self):
+        rng = np.random.default_rng(85)
+        frame = pd.DataFrame(rng.normal(0.002, 0.02, (45, 2)),
+                             index=pd.date_range("2020-01-03", periods=45, freq="W-FRI"),
+                             columns=["A", "B"])
+        trading = TradingComparison(inner_folds=2, validation_size=10,
+                                    min_train_size=20, cap=0.6, m=10,
+                                    n_steps=10, candidate_t=(0.0, 0.5))
+        history = historical_backtest(frame, self.settings, window=40,
+                                      oos_start="2020-01-01", cost_bps=25, trading=trading)
+        latest, diagnostic = latest_portfolios(frame, self.settings, history,
+                                               window=40, trading=trading)
+        old = replay_latest_recommendation(
+            frame, trading.validation_config(40), gamma=self.settings.gamma,
+            m=trading.m, beta=trading.beta, n_steps=trading.n_steps,
+            candidate_t=list(trading.candidate_t), turnover_penalty=trading.turnover_penalty,
+            rebalance_alpha=trading.rebalance_alpha, max_long_weight=trading.cap,
+            replay_start="2020-01-01",
+        )
+        np.testing.assert_allclose(latest[OLD_METHOD], old["weights"], atol=1e-8)
+        self.assertAlmostEqual(diagnostic.set_index("Method").loc[OLD_METHOD, "T"], old["T"])
+        self.assertNotIn("Pilot ratio", latest)
+        for w in latest.values():
+            self.assertAlmostEqual(w.sum(), 1)
+            self.assertLessEqual(w.max(), trading.cap+1e-9)
+        changed = frame.copy()
+        changed.iloc[-1] = [0.8, -0.4]
+        altered = historical_backtest(changed, self.settings, window=40,
+                                      oos_start="2020-01-01", cost_bps=25, trading=trading)
+        pd.testing.assert_frame_equal(history[history["Date"] < frame.index[-1]],
+                                      altered[altered["Date"] < frame.index[-1]])
+        np.testing.assert_allclose(history[history["Date"] == frame.index[-1]][["Weight A", "Weight B"]],
+                                   altered[altered["Date"] == frame.index[-1]][["Weight A", "Weight B"]])
+
+    def test_old_comparison_rejects_unmatched_or_infeasible_windows(self):
+        with self.assertRaises(ValueError):
+            fit_portfolios(self.sample, self.settings, trading=TradingComparison())
+        with self.assertRaises(ValueError):
+            fit_portfolios(self.sample, self.settings,
+                           trading=TradingComparison(inner_folds=2, validation_size=5,
+                                                      min_train_size=20, cap=0.4))
 
 
 if __name__ == "__main__":
