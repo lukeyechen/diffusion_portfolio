@@ -803,7 +803,6 @@ class _BacktestPageState extends State<BacktestPage> {
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-                isExpanded: true,
           initialValue: _holdingPeriod,
           isExpanded: true,
           decoration: const InputDecoration(
@@ -828,7 +827,6 @@ class _BacktestPageState extends State<BacktestPage> {
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-                isExpanded: true,
           initialValue: _strategy,
           isExpanded: true,
           decoration: const InputDecoration(
@@ -866,7 +864,6 @@ class _BacktestPageState extends State<BacktestPage> {
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-                isExpanded: true,
           initialValue: _turnoverMode,
           isExpanded: true,
           decoration: const InputDecoration(
