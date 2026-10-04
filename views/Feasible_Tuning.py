@@ -343,11 +343,6 @@ result, settings = saved[1], saved[2]
 st.success(f"Automatically selected Trace settings: c = {settings.c:g}, ε = {settings.epsilon:g}.")
 try:
     latest, tuning, raw_targets = _latest(returns, settings, result, window, rf, cap, trading)
-    st.subheader("Raw optimal targets — before turnover control")
-    st.caption("Classical MV respects the selected allocation constraints in both tables. The other raw targets retain their weight constraints but have no turnover penalty or partial rebalance. Classical MV matches Portfolio's Classical MV when the shared settings are enabled.")
-    raw_table = _weight_table(raw_targets, returns.columns, False)
-    raw_table["Method"] = raw_table["Method"].replace({"Classical (main sample)": "Classical MV"})
-    st.dataframe(raw_table.style.format({k: "{:.4%}" for k in [*returns.columns, "Cash"]}), hide_index=True, use_container_width=True)
     st.subheader("Final allocations — Classical MV stays unadjusted")
     st.caption(f"Common estimation block: {pd.Timestamp(returns.index[-window]).date()} to {pd.Timestamp(returns.index[-1]).date()}, n={window}, γ={gamma:g}. " + (f"Turnover penalty {penalty:g} bps, rebalance step {alpha:g}%, cap {cap:.0%}." if practical else "No turnover penalty or partial-rebalance adjustment to the targets."))
     st.dataframe(_weight_table(latest, returns.columns, practical).style.format({k: "{:.4%}" for k in [*returns.columns,"Cash"]}), hide_index=True, use_container_width=True)

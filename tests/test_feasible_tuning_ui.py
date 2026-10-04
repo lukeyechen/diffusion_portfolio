@@ -72,17 +72,16 @@ def test_historical_controls_and_results_without_live_download():
     run.click().run(timeout=30)
     assert not app.exception
     assert not app.error
-    assert len(app.dataframe) == 7
-    assert "Trace tuning" in app.dataframe[4].value["Method"].values
-    assert list(app.dataframe[4].value["Method"]).count("Classical MV") == 1
-    assert "Classical MV + turnover control" not in app.dataframe[4].value["Method"].values
-    raw = app.dataframe[2].value.set_index("Method").loc["Classical MV"]
-    final = app.dataframe[3].value.set_index("Method").loc["Classical MV"]
-    np.testing.assert_allclose(raw.to_numpy(dtype=float), final.to_numpy(dtype=float))
+    assert len(app.dataframe) == 6
+    assert "Trace tuning" in app.dataframe[3].value["Method"].values
+    assert list(app.dataframe[3].value["Method"]).count("Classical MV") == 1
+    assert "Classical MV + turnover control" not in app.dataframe[3].value["Method"].values
+    final = app.dataframe[2].value.set_index("Method").loc["Classical MV"]
+    assert not any("Raw optimal targets" in item.value for item in app.subheader)
     assert (final.to_numpy(dtype=float) >= 0).all()
     assert (final.to_numpy(dtype=float) <= .4 + 1e-7).all()
     assert "Backtest / strategy replay start date" in [item.label for item in app.text_input]
-    assert "Pilot ratio" not in app.dataframe[4].value["Method"].values
+    assert "Pilot ratio" not in app.dataframe[3].value["Method"].values
 
 
 def test_comparison_controls_reuse_saved_portfolio_settings():
@@ -128,12 +127,12 @@ def test_comparison_controls_reuse_saved_portfolio_settings():
     assert not any(item.value == "Trace tuning versus old Portfolio" for item in app.subheader)
     headings = [item.value for item in app.subheader]
     assert headings.index("Final allocations — Classical MV stays unadjusted") < headings.index("Historical results")
-    historical = app.dataframe[4].value
+    historical = app.dataframe[3].value
     assert {"Trace tuning (no TC)", "Old Diffusion (Best-T, no TC)"} <= set(historical["Method"])
-    assert len(app.dataframe) == 8
+    assert len(app.dataframe) == 7
     assert any("both match the saved Portfolio" in item.value for item in app.success)
-    assert "Old Portfolio (Best-T + turnover control)" in app.dataframe[4].value["Method"].values
-    assert "Pilot ratio" not in app.dataframe[4].value["Method"].values
+    assert "Old Portfolio (Best-T + turnover control)" in app.dataframe[3].value["Method"].values
+    assert "Pilot ratio" not in app.dataframe[3].value["Method"].values
 
 
 def test_historical_results_survive_navigation_and_new_portfolio_snapshot():
@@ -203,7 +202,7 @@ def test_uploaded_data_and_results_survive_navigation():
     _leave_and_return(app)
     assert _field(app, "radio", "Data source").value == "Upload CSV"
     assert any("returns.csv" in item.value for item in app.caption)
-    assert len(app.dataframe) == 7
+    assert len(app.dataframe) == 6
     pd.testing.assert_frame_equal(original, app.dataframe[0].value)
 
 
