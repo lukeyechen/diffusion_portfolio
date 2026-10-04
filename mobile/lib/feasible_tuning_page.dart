@@ -139,9 +139,10 @@ class _FeasibleTuningPageState extends State<FeasibleTuningPage> {
     if (_result != null) ...[
       Text('Selected c = ${_result!['selected_c']}; ε = ${_result!['selected_epsilon']}'),
       Text('Calibration through ${_result!['calibration_through']}; data through ${_result!['data_through']}'),
-      _table('Historical results', _result!['summary'], percent: true),
       _table('Raw optimal targets', _result!['raw_allocations'], percent: true),
       _table('Final allocations', _result!['allocations'], percent: true),
+      const Text('Trace tuning and Old Portfolio use TC. No TC rows use full rebalancing without a turnover penalty; trading costs still apply.'),
+      _table('Historical results', _result!['summary'], percent: true),
       _table('Latest tuning values', _result!['tuning']),
     ],
   ]);

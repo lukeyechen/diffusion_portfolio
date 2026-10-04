@@ -17,7 +17,7 @@ import core.feasible_tuning as _feasible_module
 if (not hasattr(_feasible_module, "trace_calibration")
         or not hasattr(_feasible_module, "epsilon_sensitivity")
         or getattr(_feasible_module, "TRACE_CALIBRATION_VERSION", None) != 2
-        or getattr(_feasible_module, "COMPARISON_VERSION", None) != 4
+        or getattr(_feasible_module, "COMPARISON_VERSION", None) != 5
         or getattr(_feasible_module, "CLASSICAL_MV_RULE", None) != "allocation-aware-classical-v2"):
     importlib.reload(_feasible_module)
 from core.feasible_tuning import (OLD_METHOD, TradingComparison, TuningSettings, coefficients,
@@ -61,21 +61,21 @@ def _download(tickers, start, period):
 
 @st.cache_data(show_spinner=False)
 def _history(returns, settings, window, start, rf, cost, cap, trading):
-    # Comparison v4: Trace tuning only; allocation-aware Classical MV: invalidate pre-fix cached results.
+    # Comparison v5: Trace tuning only; allocation-aware Classical MV: invalidate pre-fix cached results.
     return historical_backtest(returns, settings, window=window,
                                oos_start=start, rf=rf, cost_bps=cost, cap=cap, trading=trading)
 
 
 @st.cache_data(show_spinner=False)
 def _latest(returns, settings, history, window, rf, cap, trading):
-    # Comparison v4: Trace tuning only; allocation-aware Classical MV.
+    # Comparison v5: Trace tuning only; allocation-aware Classical MV.
     return latest_portfolios(returns, settings, history, window=window,
                              rf=rf, cap=cap, trading=trading, return_raw=True)
 
 
 @st.cache_data(show_spinner=False)
 def _epsilon(returns, settings, candidates, window, start, evaluation_start, ppy, rf, cost, cap, trading, end_date):
-    # Comparison v4: Trace tuning only; allocation-aware Classical MV.
+    # Comparison v5: Trace tuning only; allocation-aware Classical MV.
     return epsilon_sensitivity(returns, settings, candidates, window=window,
                                calibration_start=start, evaluation_start=evaluation_start,
                                periods_per_year=ppy, rf=rf, cost_bps=cost, cap=cap, trading=trading, end_date=end_date)
@@ -99,7 +99,7 @@ def _weight_table(portfolios, assets, practical):
 
 @st.cache_data(show_spinner=False)
 def _gaussian(mu, sigma, settings, n, repetitions, seed):
-    # Comparison v4 excludes Fixed b and Same-sample ratio.
+    # Comparison v5 excludes Fixed b and Same-sample ratio.
     return gaussian_experiment(mu, sigma, settings, n=n, repetitions=repetitions, seed=seed)
 
 
@@ -341,21 +341,6 @@ if saved is None or saved[0] != grid_signature:
     st.stop()
 result, settings = saved[1], saved[2]
 st.success(f"Automatically selected Trace settings: c = {settings.c:g}, ε = {settings.epsilon:g}.")
-st.subheader("Historical results")
-st.caption(f"{result['Date'].min().date()} to {result['Date'].max().date()}; all methods use the same evaluated periods. Returns cover the complete test.")
-summary, wealth = [], {}
-for method, group in result.groupby("Method", sort=False):
-    net = group["Net return"].to_numpy()
-    metrics = performance_metrics(net, gamma=gamma, periods_per_year=ppy)
-    excess = net-rf
-    summary.append({"Method": _label(method, practical), "Total return": metrics["Total return"], "CAGR": metrics["CAGR"],
-                    "Volatility": metrics["Annualized vol"], "Max drawdown": metrics["Max drawdown"],
-                    "Annualized MV excess": ppy*(excess.mean()-gamma/2*np.var(excess, ddof=1)) if len(net)>1 else np.nan,
-                    "Average turnover": group["Turnover"].mean()})
-    wealth[_label(method, practical)] = pd.Series(np.cumprod(1+net), index=group["Date"])
-st.dataframe(pd.DataFrame(summary).style.format({k: "{:.2%}" for k in summary[0] if k != "Method"}), hide_index=True, use_container_width=True)
-st.line_chart(pd.DataFrame(wealth), use_container_width=True)
-st.caption("Wealth index starts at 1. Historical MV statistics do not estimate the theorem's population K2 directly.")
 try:
     latest, tuning, raw_targets = _latest(returns, settings, result, window, rf, cap, trading)
     st.subheader("Raw optimal targets — before turnover control")
@@ -366,6 +351,21 @@ try:
     st.subheader("Final allocations — Classical MV stays unadjusted")
     st.caption(f"Common estimation block: {pd.Timestamp(returns.index[-window]).date()} to {pd.Timestamp(returns.index[-1]).date()}, n={window}, γ={gamma:g}. " + (f"Turnover penalty {penalty:g} bps, rebalance step {alpha:g}%, cap {cap:.0%}." if practical else "No turnover penalty or partial-rebalance adjustment to the targets."))
     st.dataframe(_weight_table(latest, returns.columns, practical).style.format({k: "{:.4%}" for k in [*returns.columns,"Cash"]}), hide_index=True, use_container_width=True)
+    st.subheader("Historical results")
+    st.caption(f"{result['Date'].min().date()} to {result['Date'].max().date()}; all methods use the same evaluated periods. Returns cover the complete test.")
+    summary, wealth = [], {}
+    for method, group in result.groupby("Method", sort=False):
+        net = group["Net return"].to_numpy()
+        metrics = performance_metrics(net, gamma=gamma, periods_per_year=ppy)
+        excess = net-rf
+        summary.append({"Method": _label(method, practical), "Total return": metrics["Total return"], "CAGR": metrics["CAGR"],
+                        "Volatility": metrics["Annualized vol"], "Max drawdown": metrics["Max drawdown"],
+                        "Annualized MV excess": ppy*(excess.mean()-gamma/2*np.var(excess, ddof=1)) if len(net)>1 else np.nan,
+                        "Average turnover": group["Turnover"].mean()})
+        wealth[_label(method, practical)] = pd.Series(np.cumprod(1+net), index=group["Date"])
+    st.dataframe(pd.DataFrame(summary).style.format({k: "{:.2%}" for k in summary[0] if k != "Method"}), hide_index=True, use_container_width=True)
+    st.line_chart(pd.DataFrame(wealth), use_container_width=True)
+    st.caption("Trace tuning and Old Portfolio use TC; their no TC rows use full rebalancing with no turnover penalty. Both Trace rows use the same calibrated c and ε. Trading costs apply to all rows. Wealth index starts at 1. Historical MV statistics do not estimate the theorem's population K2 directly.")
     if use_shared and "weights" in shared and "classical_weights" in shared:
         st.subheader("Check against the saved Portfolio result")
         audit = pd.DataFrame([
@@ -379,7 +379,7 @@ try:
             st.warning("The saved Portfolio comparison does not match. Rerun Portfolio and this comparison with the complete saved settings before interpreting the differences.")
     st.subheader("Latest tuning values")
     tuning_display = tuning.drop(columns=["a", "Effective b = n a"], errors="ignore").copy()
-    trace_rows = tuning_display["Method"] == "Trace tuning"
+    trace_rows = tuning_display["Method"].isin(["Trace tuning", "Trace tuning (no TC)"])
     tuning_display.insert(1, "Trace c", np.where(trace_rows, settings.c, np.nan))
     tuning_display.insert(2, "Trace ε", np.where(trace_rows, settings.epsilon, np.nan))
     tuning_display = tuning_display.rename(columns={"b": "b (noise level)"})

@@ -137,6 +137,8 @@ class FeasibleTuningTests(unittest.TestCase):
         previous = {"Classical (main sample)": np.array([0.6, 0.4])}
         final, _, raw = fit_portfolios(self.sample, self.settings, trading=trading,
                                        previous=previous, return_raw=True)
+        np.testing.assert_allclose(final["Trace tuning (no TC)"], raw["Trace tuning"], atol=1e-10)
+        np.testing.assert_allclose(final["Old Diffusion (Best-T, no TC)"], raw[OLD_METHOD], atol=1e-10)
         u, h = moments(self.sample)
         from core.portfolio_rules import compute_weights
         expected = compute_weights("Mean-Variance", u, h, gamma=self.settings.gamma,

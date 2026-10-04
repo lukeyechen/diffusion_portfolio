@@ -22,7 +22,7 @@ TRACE_CALIBRATION_VERSION = 2
 
 OLD_METHOD = "Old Portfolio (Best-T + turnover control)"
 CLASSICAL_MV_RULE = "allocation-aware-classical-v2"
-COMPARISON_VERSION = 4
+COMPARISON_VERSION = 5
 
 
 @dataclass(frozen=True)
@@ -179,6 +179,16 @@ def fit_portfolios(sample, settings, *, pilot=None, cap=None, trading=None, prev
             "T": -float(np.log(a)) / (trading.beta if trading else 1.0),
             "Horizon rule": "Direct b rule",
         })
+    if trading is not None and methods is None and "Trace tuning" in portfolios:
+        b = choices["Trace tuning"]
+        a = min(settings.a_max, b / n)
+        mean, covariance = endpoint_moments(u, h, a)
+        no_tc = compute_weights("Mean-Variance", mean, covariance, gamma=settings.gamma,
+                                constraint_mode="Long-only", max_long_weight=trading.cap)
+        portfolios["Trace tuning (no TC)"] = no_tc
+        raw_portfolios["Trace tuning (no TC)"] = no_tc.copy()
+        diagnostics.append({**next(row for row in diagnostics if row["Method"] == "Trace tuning"),
+                            "Method": "Trace tuning (no TC)"})
     if pilot is not None:
         full_u, full_h = moments(np.concatenate([pilot, sample]))
         full_classical = classical_weights(full_u, full_h)
@@ -198,6 +208,15 @@ def fit_portfolios(sample, settings, *, pilot=None, cap=None, trading=None, prev
             raw_portfolios[OLD_METHOD] = compute_weights(
                 "Mean-Variance", old["mu"], old["sigma"], gamma=settings.gamma,
                 constraint_mode="Long-only", max_long_weight=trading.cap)
+        if methods is None:
+            # Nested Best-T selection does not depend on TC or previous holdings.
+            no_tc = compute_weights("Mean-Variance", old["mu"], old["sigma"], gamma=settings.gamma,
+                                    constraint_mode="Long-only", max_long_weight=trading.cap)
+            portfolios["Old Diffusion (Best-T, no TC)"] = no_tc
+            raw_portfolios["Old Diffusion (Best-T, no TC)"] = no_tc.copy()
+            diagnostics.append({"Method": "Old Diffusion (Best-T, no TC)", "b": np.nan,
+                                "a": np.nan, "Effective b = n a": np.nan, "T": old["T"],
+                                "Horizon rule": "Nested candidate grid"})
         diagnostics.append({"Method": OLD_METHOD, "b": np.nan, "a": np.nan,
                             "Effective b = n a": np.nan,
                             "T": old["T"], "Horizon rule": "Nested candidate grid"})

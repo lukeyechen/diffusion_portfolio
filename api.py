@@ -791,8 +791,8 @@ def feasible_trace(
             summary.append({"Method": label(method), **metrics,
                             "Annualized MV excess": ppy*(excess.mean()-request.gamma/2*np.var(excess, ddof=1)),
                             "Average turnover": group["Turnover"].mean()})
-        tuning["Trace c"] = np.where(tuning["Method"] == "Trace tuning", settings.c, np.nan)
-        tuning["Trace ε"] = np.where(tuning["Method"] == "Trace tuning", settings.epsilon, np.nan)
+        tuning["Trace c"] = np.where(tuning["Method"].isin(["Trace tuning", "Trace tuning (no TC)"]), settings.c, np.nan)
+        tuning["Trace ε"] = np.where(tuning["Method"].isin(["Trace tuning", "Trace tuning (no TC)"]), settings.epsilon, np.nan)
         return {
             "selected_c": settings.c, "selected_epsilon": settings.epsilon,
             "calibration_through": pd.Timestamp(calibrated["calibration_through"]).date().isoformat(),
