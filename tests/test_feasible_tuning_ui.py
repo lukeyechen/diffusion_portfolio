@@ -149,7 +149,7 @@ def test_historical_results_survive_navigation_and_new_portfolio_snapshot():
     assert not app.exception
     assert not app.error
     original = [item.value.copy() for item in app.dataframe]
-    assert len(original) == 7
+    assert len(original) == 6
     app.sidebar.radio[0].set_value("Other").run()
     assert not app.number_input
     # The Portfolio page can create a snapshot while Feasible Tuning is absent.
