@@ -251,7 +251,7 @@ def test_feasible_trace_matches_shared_engine_and_excludes_removed_methods(monke
     assert result["selected_epsilon"] == winner["ε"]
     assert pd.Timestamp(result["calibration_through"]) < pd.Timestamp(request.oos_start)
     assert {row["Method"] for row in result["summary"]} == {
-        "Classical MV", "Trace tuning", "Old Portfolio (Best-T + turnover control)"
+        "Classical MV", "Trace tuning", "Trace tuning (no TC)", "Old Diffusion (Best-T, no TC)", "Old Portfolio (Best-T + turnover control)"
     }
     assert not {"a cap active", "a", "Effective b = n a"} & result["tuning"][0].keys()
     trace = next(row for row in result["tuning"] if row["Method"] == "Trace tuning")
