@@ -61,21 +61,21 @@ def _download(tickers, start, period):
 
 @st.cache_data(show_spinner=False)
 def _history(returns, settings, window, start, rf, cost, cap, trading):
-    # Comparison v5: Trace tuning only; allocation-aware Classical MV: invalidate pre-fix cached results.
+    # Gaussian score solver v2; Comparison v5: Trace tuning only; allocation-aware Classical MV: invalidate pre-fix cached results.
     return historical_backtest(returns, settings, window=window,
                                oos_start=start, rf=rf, cost_bps=cost, cap=cap, trading=trading)
 
 
 @st.cache_data(show_spinner=False)
 def _latest(returns, settings, history, window, rf, cap, trading):
-    # Comparison v5: Trace tuning only; allocation-aware Classical MV.
+    # Gaussian score solver v2; Comparison v5: Trace tuning only; allocation-aware Classical MV.
     return latest_portfolios(returns, settings, history, window=window,
                              rf=rf, cap=cap, trading=trading, return_raw=True)
 
 
 @st.cache_data(show_spinner=False)
 def _epsilon(returns, settings, candidates, window, start, evaluation_start, ppy, rf, cost, cap, trading, end_date):
-    # Comparison v5: Trace tuning only; allocation-aware Classical MV.
+    # Gaussian score solver v2; Comparison v5: Trace tuning only; allocation-aware Classical MV.
     return epsilon_sensitivity(returns, settings, candidates, window=window,
                                calibration_start=start, evaluation_start=evaluation_start,
                                periods_per_year=ppy, rf=rf, cost_bps=cost, cap=cap, trading=trading, end_date=end_date)
@@ -83,6 +83,7 @@ def _epsilon(returns, settings, candidates, window, start, evaluation_start, ppy
 
 @st.cache_data(show_spinner=False)
 def _trace_grid(returns, settings, epsilons, cs, window, start, evaluation_start, ppy, rf, cost, cap, trading, end_date):
+    # Gaussian score solver v2: refresh old-method comparison results.
     return trace_calibration(returns, settings, epsilons, cs=cs, window=window,
                              calibration_start=start, evaluation_start=evaluation_start,
                              periods_per_year=ppy, rf=rf, cost_bps=cost, cap=cap, trading=trading, end_date=end_date)

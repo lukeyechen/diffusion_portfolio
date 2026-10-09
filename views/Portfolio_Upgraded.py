@@ -51,6 +51,7 @@ def _cached_latest_recommendation(
     replay_start,
     mean_model,
 ):
+    # Gaussian score solver v2: invalidate cached inverse-based results.
     return replay_latest_recommendation(
         returns,
         cfg,
@@ -284,19 +285,23 @@ if run:
     with st.spinner(
         "Replaying historical turnover state, selecting nested Best-T, and computing exact diffusion moments..."
     ):
-        rec = _cached_latest_recommendation(
-            returns,
-            cfg,
-            gamma,
-            m,
-            beta,
-            n_steps,
-            turnover_penalty,
-            rebalance_alpha,
-            max_long_weight,
-            replay_start,
-            mean_model,
-        )
+        try:
+            rec = _cached_latest_recommendation(
+                returns,
+                cfg,
+                gamma,
+                m,
+                beta,
+                n_steps,
+                turnover_penalty,
+                rebalance_alpha,
+                max_long_weight,
+                replay_start,
+                mean_model,
+            )
+        except (ValueError, np.linalg.LinAlgError) as exc:
+            st.error(f"Diffusion calculation failed: {exc}")
+            st.stop()
 
     x = returns.iloc[-int(lookback):].to_numpy(dtype=float)
     mu_h, sigma_h = sample_moments(x, mle=True)
