@@ -63,7 +63,7 @@ class _FeasibleTuningPageState extends State<FeasibleTuningPage> {
     setState(() { _loading = true; _error = null; _result = null; });
     try {
       final response = await PortfolioApiClient(baseUrl: widget.apiUrl(), identityToken: widget.identityToken()).feasibleTuning({
-        'tickers': _tickers.text.split(RegExp(r'[,\s]+')).where((v) => v.isNotEmpty).toList(),
+        'tickers': _tickers.text.split(RegExp(r'[,\s]+')).where((v) => v.isNotEmpty).map((v) => v.toUpperCase()).toList(),
         'start_date': _history.text.trim(), 'oos_start': _start.text.trim(), 'end_date': _end.text.trim(),
         'holding_period': _period, 'lookback': int.parse(_window.text),
         'gamma': double.parse(_gamma.text), 'max_long_weight': double.parse(_cap.text),
@@ -110,7 +110,10 @@ class _FeasibleTuningPageState extends State<FeasibleTuningPage> {
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(16), children: [
     Text('Feasible Tuning', style: Theme.of(context).textTheme.headlineSmall),
     const Text('Run automatically selects c and ε using data before the backtest starts. Classical MV, Trace tuning and Old Portfolio use the same estimation window.'),
-    _field('Tickers', _tickers),
+    const SizedBox(height: 16),
+    Text('Enter stocks / download from Yahoo', style: Theme.of(context).textTheme.titleMedium),
+    const Text('Enter stock symbols separated by commas or spaces. Run downloads Yahoo Finance history for these stocks, then calibrates and replays the strategy.'),
+    _field('Tickers (Yahoo Finance)', _tickers),
     _field('Data history starts (YYYY-MM-DD)', _history),
     DropdownButtonFormField<String>(
       initialValue: _period, decoration: const InputDecoration(labelText: 'Holding period'),
@@ -133,7 +136,7 @@ class _FeasibleTuningPageState extends State<FeasibleTuningPage> {
       _field('Old-method synthetic-equivalent M', _m), _field('Constant β', _beta), _field('Old-method reverse SDE steps', _steps),
     ]),
     const SizedBox(height: 12),
-    FilledButton(onPressed: _loading ? null : _run, child: Text(_loading ? 'Calibrating and replaying…' : 'Run feasible-tuning backtest')),
+    FilledButton(onPressed: _loading ? null : _run, child: Text(_loading ? 'Downloading, calibrating and replaying…' : 'Download from Yahoo & run')),
     if (_loading) const LinearProgressIndicator(),
     if (_error != null) Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
     if (_result != null) ...[

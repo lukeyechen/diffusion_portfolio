@@ -76,3 +76,9 @@ controls, the cap-active column, and the duplicate Trace-versus-old table are
 omitted. Latest tuning values use an em dash for unused parameters.
 
 Deploy the updated API as well as the mobile builds before using this page.
+
+Stock entry is always visible under **Enter stocks / download from Yahoo**.
+Enter comma- or space-separated ticker symbols, then tap **Download from Yahoo &
+run** below calibration settings. The API downloads Yahoo Finance history for
+those stocks before calibrating and replaying; no saved Portfolio dataset is
+required. This input flow is shared by the iPhone PWA and Android.
