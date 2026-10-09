@@ -106,6 +106,7 @@ def test_comparison_controls_reuse_saved_portfolio_settings():
                     classical_rule="allocation-aware-classical-v2")
     app.session_state["shared_current_window"] = snapshot
     app.run()
+    _field(app, "checkbox", "Use Portfolio tab's saved data and settings").set_value(True).run()
     assert not app.exception
     fields = {item.label: item.value for item in app.number_input}
     assert fields["Main estimation window"] == 520
@@ -215,6 +216,7 @@ def test_shared_snapshot_refresh_overrides_stale_common_inputs():
                     gamma=4.0, max_long_weight=.4, n_steps=10, replay_start="2025-01-01")
     app.session_state["shared_current_window"] = snapshot
     app.run()
+    _field(app, "checkbox", "Use Portfolio tab's saved data and settings").set_value(True).run()
     app.sidebar.radio[0].set_value("Other").run()
     app.session_state["shared_current_window"] = dict(snapshot, gamma=2.0, replay_start="2023-01-01")
     app.sidebar.radio[0].set_value("Feasible Tuning").run()
@@ -303,3 +305,21 @@ def test_trace_c_precision_and_latest_noise_labels():
     assert not tuning.isna().any().any()
     assert "Same-sample ratio" not in tuning.index
     assert tuning.loc["Trace tuning", "b (noise level)"] != 7
+
+
+def test_yahoo_controls_remain_available_with_saved_portfolio():
+    app = AppTest.from_file(PAGE)
+    app.session_state["shared_current_window"] = dict(full_returns=_returns(), holding_period="1 week")
+    app.run()
+    assert not app.exception
+    assert _field(app, "radio", "Data source").value == "Yahoo Finance"
+    assert _field(app, "text_input", "Tickers")
+    assert _field(app, "button", "Download / refresh feasible-tuning data")
+    _field(app, "checkbox", "Use Portfolio tab's saved data and settings").set_value(True).run()
+    assert not any(w.label == "Tickers" for w in app.text_input)
+    _field(app, "button", "Enter stocks / download from Yahoo").click().run()
+    assert not app.exception
+    assert not _field(app, "checkbox", "Use Portfolio tab's saved data and settings").value
+    assert _field(app, "radio", "Data source").value == "Yahoo Finance"
+    assert _field(app, "text_input", "Tickers")
+    assert _field(app, "button", "Download / refresh feasible-tuning data")

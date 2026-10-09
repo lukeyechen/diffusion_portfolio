@@ -119,7 +119,11 @@ has_shared = (isinstance(shared.get("full_returns"), pd.DataFrame)
               and shared.get("holding_period") in HORIZON_PRESETS)
 use_shared = False
 if experiment == "Historical backtest" and has_shared:
-    use_shared = _input(st, "checkbox", "Use Portfolio tab's saved data and settings", value=True, key="use_shared")
+    if st.button("Enter stocks / download from Yahoo"):
+        st.session_state.setdefault("feasible_inputs", {}).update(use_shared=False, source="Yahoo Finance")
+        st.session_state["_feasible_widget_use_shared"] = False
+        st.session_state["_feasible_widget_source"] = "Yahoo Finance"
+    use_shared = _input(st, "checkbox", "Use Portfolio tab's saved data and settings", value=False, key="use_shared")
 elif experiment == "Historical backtest":
     st.session_state.setdefault("feasible_inputs", {}).setdefault("use_shared", False)
 defaults = shared if use_shared else {}
