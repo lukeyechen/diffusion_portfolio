@@ -18,6 +18,7 @@ from core.short_horizon_portfolio import (
     replay_latest_recommendation,
 )
 from core.turnover_upgrade import portfolio_turnover
+from core.diffusion import gaussian_score_diagnostics
 
 
 @st.cache_data(show_spinner=False)
@@ -46,6 +47,7 @@ def _cached_diagnostics(
     max_long_weight,
     replay_start,
 ):
+    # Gaussian score solver v2: invalidate cached inverse-based results.
     return replay_latest_recommendation(
         returns,
         cfg,
@@ -266,18 +268,22 @@ with st.expander("Diagnostic formulas"):
 # -----------------------------------------------------------------------------
 if st.button("▶ Run diffusion diagnostics", type="primary", use_container_width=True, key="diag_up_run"):
     with st.spinner("Replaying strategy state and evaluating nested T candidates..."):
-        rec = _cached_diagnostics(
-            returns,
-            cfg,
-            gamma,
-            m,
-            beta,
-            n_steps,
-            turnover_penalty,
-            rebalance_alpha,
-            max_long_weight,
-            replay_start,
-        )
+        try:
+            rec = _cached_diagnostics(
+                returns,
+                cfg,
+                gamma,
+                m,
+                beta,
+                n_steps,
+                turnover_penalty,
+                rebalance_alpha,
+                max_long_weight,
+                replay_start,
+            )
+        except (ValueError, np.linalg.LinAlgError) as exc:
+            st.error(f"Diffusion calculation failed: {exc}")
+            st.stop()
 
     x = returns.iloc[-int(lookback):].to_numpy(dtype=float)
     mu_h, sigma_h = sample_moments(x, mle=True)
@@ -309,7 +315,14 @@ if st.button("▶ Run diffusion diagnostics", type="primary", use_container_widt
         max_long_weight=float(max_long_weight),
     )
 
+    try:
+        score_solver = gaussian_score_diagnostics(mu_h, sigma_h, float(rec["T"]), float(beta), int(n_steps))
+    except ValueError as exc:
+        st.error(str(exc))
+        st.stop()
+
     st.session_state["diag_up_result"] = {
+        "score_solver": score_solver,
         "rec": rec,
         "mu_h": np.asarray(mu_h, dtype=float),
         "sigma_h": np.asarray(sigma_h, dtype=float),
@@ -397,6 +410,14 @@ st.plotly_chart(fig_t, use_container_width=True)
 # 5. Moment diagnostics
 # -----------------------------------------------------------------------------
 st.subheader("4. What Diffusion Changed in the Moments")
+if res.get("score_solver"):
+    with st.expander("Gaussian score covariance: Cholesky conditioning"):
+        solver_table = pd.DataFrame(res["score_solver"])
+        st.caption("The sampler uses triangular solves; the exact moment recursion solves against the identity for the full precision matrix. Any ridge shown here changes the score covariance explicitly. No pseudoinverse or Neumann approximation is used.")
+        st.dataframe(solver_table, hide_index=True, use_container_width=True)
+        if solver_table["Ridge added"].max() > 0:
+            st.warning("Some Gaussian score covariances required a ridge to meet the eigenvalue floor and condition limit.")
+
 summary_diag = pd.DataFrame(
     {
         "Metric": [

@@ -4,6 +4,7 @@ import numpy as np
 from scipy.optimize import minimize
 
 from .diffusion import forward_moments
+from .covariance_solver import factor_covariance
 from .metrics import certainty_equivalent
 from .moments import regularize_covariance, sample_moments
 from .portfolio_rules import solve_mv_constrained
@@ -24,19 +25,18 @@ def exact_reverse_diffusion_moments(
     x = np.asarray(returns, dtype=float)
     if x.ndim != 2 or x.shape[0] < 2:
         raise ValueError("returns must be a 2D array with at least two observations.")
-    if horizon < 0:
+    if not np.isfinite(horizon) or horizon < 0:
         raise ValueError("horizon must be nonnegative.")
-    if beta <= 0:
+    if not np.isfinite(beta) or beta <= 0:
         raise ValueError("beta must be positive.")
     if n_steps < 1:
         raise ValueError("n_steps must be at least 1.")
 
     mu_hat, sigma_hat = sample_moments(x, mle=True)
-    sigma_hat = regularize_covariance(sigma_hat)
     n_assets = x.shape[1]
 
     if horizon == 0:
-        return mu_hat.copy(), sigma_hat.copy()
+        return mu_hat.copy(), factor_covariance(sigma_hat).matrix
 
     eye = np.eye(n_assets)
     prior_var = 1.0 - np.exp(-beta * horizon)
@@ -48,9 +48,9 @@ def exact_reverse_diffusion_moments(
         t = k * dt
         u = max(float(horizon) - t, 0.0)
         mu_u, sigma_u = forward_moments(mu_hat, sigma_hat, u, beta)
-        sigma_u = regularize_covariance(sigma_u)
-        a_u = np.linalg.inv(sigma_u)
-        b_u = a_u @ mu_u
+        solver = factor_covariance(sigma_u)
+        a_u = solver.solve(eye)
+        b_u = solver.solve(mu_u)
 
         # X_{k+1} = F X_k + beta*b_u*dt + sqrt(beta*dt) eps.
         drift_matrix = -beta * (a_u - 0.5 * eye)

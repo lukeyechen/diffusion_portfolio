@@ -26,6 +26,7 @@ def download(tickers):
 
 @st.cache_data(show_spinner=False)
 def run_comparison(data,settings):
+    # Gaussian score solver v2: refresh the previous-method comparison.
     return compare(data,**settings)
 
 shared=st.session_state.get('shared_current_window',{})
