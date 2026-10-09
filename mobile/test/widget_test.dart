@@ -45,6 +45,9 @@ void main() {
     await tester.tap(find.text('Feasible Tuning').last);
     await tester.pumpAndSettle();
     expect(find.textContaining('Run automatically selects c'), findsOneWidget);
+    expect(find.text('Enter stocks / download from Yahoo'), findsOneWidget);
+    expect(find.text('Tickers (Yahoo Finance)'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Tickers (Yahoo Finance)'), findsOneWidget);
     expect(find.text('Maximum a'), findsNothing);
     expect(find.text('Trace tuning versus old Portfolio'), findsNothing);
   });
