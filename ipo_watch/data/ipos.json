@@ -1,0 +1,1861 @@
+{
+  "rows": [
+    {
+      "date": "2026-01-06",
+      "ticker": "ARTC",
+      "name": "Art Technology Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-06",
+      "ticker": "BIII",
+      "name": "Black Spade Acquisition III Co",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-07",
+      "ticker": "SORN",
+      "name": "Soren Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-08",
+      "ticker": "BBCQ",
+      "name": "Bleichroeder Acquisition Corp. II",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-08",
+      "ticker": "BUDA",
+      "name": "Buda Juice, Inc.",
+      "offer": 7.5,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-01-09",
+      "ticker": "AKTS",
+      "name": "Aktis Oncology, Inc.",
+      "offer": 18.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-01-09",
+      "ticker": "ZKP",
+      "name": "Lafayette Digital Acquisition Corp. I",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-13",
+      "ticker": "GCDT",
+      "name": "Green Circle Decarbonize Technology Limited",
+      "offer": 4.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-01-14",
+      "ticker": "OIM",
+      "name": "OneIM Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-16",
+      "ticker": "FGII",
+      "name": "FG Imperii Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-16",
+      "ticker": "IEAG",
+      "name": "Infinite Eagle Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-21",
+      "ticker": "XCBE",
+      "name": "X3 Acquisition Corp. Ltd.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-22",
+      "ticker": "ALOV",
+      "name": "Aldabra 4 Liquidity Opportunity Vehicle, Inc.",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-01-22",
+      "ticker": "BTGO",
+      "name": "Bitgo Holdings, Inc.",
+      "offer": 18.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-01-23",
+      "ticker": "ARCI",
+      "name": "Archimedes Tech SPAC Partners III Co.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-23",
+      "ticker": "EQPT",
+      "name": "EquipmentShare.com Inc.",
+      "offer": 24.5,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-01-23",
+      "ticker": "HLXC",
+      "name": "Helix Acquisition Corp. III",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-23",
+      "ticker": "LEGO",
+      "name": "Legato Merger Corp. IV",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-23",
+      "ticker": "PTOR",
+      "name": "Praetorian Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-27",
+      "ticker": "GIX",
+      "name": "GigCapital9 Corp.",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-01-27",
+      "ticker": "MLAA",
+      "name": "Mountain Lake Acquisition Corp. II",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-28",
+      "ticker": "KRAQ",
+      "name": "KRAKacquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-28",
+      "ticker": "PPHC",
+      "name": "Public Policy Holding Company, Inc.",
+      "offer": 12.25,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-01-28",
+      "ticker": "SAAQ",
+      "name": "Space Asset Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-29",
+      "ticker": "KTWO",
+      "name": "K2 Capital Acquisition Corporation",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-29",
+      "ticker": "LIFE",
+      "name": "Ethos Technologies Inc.",
+      "offer": 19.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-01-29",
+      "ticker": "PICS",
+      "name": "PicS N.V.",
+      "offer": 19.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-01-29",
+      "ticker": "UAC",
+      "name": "United Acquisition Corp. I",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-29",
+      "ticker": "XSLL",
+      "name": "Xsolla SPAC 1",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-29",
+      "ticker": "YSS",
+      "name": "York Space Systems, Inc.",
+      "offer": 34.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-01-30",
+      "ticker": "MEVO",
+      "name": "M Evo Global Acquisition Corp II",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-30",
+      "ticker": "MUZE",
+      "name": "Muzero Acquisition Corp",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-01-30",
+      "ticker": "NBRG",
+      "name": "Newbridge Acquisition Limited",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-02",
+      "ticker": "WPAC",
+      "name": "White Pearl Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-03",
+      "ticker": "IRAB",
+      "name": "Iris Acquisition Corp II",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-04",
+      "ticker": "CLBR",
+      "name": "Colombier Acquisition Corp. III",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-04",
+      "ticker": "MANE",
+      "name": "Veradermics, Incorporated",
+      "offer": 17.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-02-05",
+      "ticker": "BOBS",
+      "name": "Bob's Discount Furniture, Inc.",
+      "offer": 17.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-02-05",
+      "ticker": "CEPS",
+      "name": "Cantor Equity Partners VI, Inc.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-05",
+      "ticker": "EIKN",
+      "name": "Eikon Therapeutics, Inc.",
+      "offer": 18.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-02-05",
+      "ticker": "FPS",
+      "name": "Forgent Power Solutions, Inc.",
+      "offer": 27.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-02-05",
+      "ticker": "HCIC",
+      "name": "Hennessy Capital Investment Corp. VIII",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-02-06",
+      "ticker": "AGMB",
+      "name": "AgomAb Therapeutics NV",
+      "offer": 16.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-02-06",
+      "ticker": "CAQ",
+      "name": "Cambridge Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-06",
+      "ticker": "OFRM",
+      "name": "Once Upon A Farm, PBC",
+      "offer": 18.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-02-06",
+      "ticker": "SGP",
+      "name": "SpyGlass Pharma, Inc.",
+      "offer": 16.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-02-06",
+      "ticker": "SSAC",
+      "name": "SPACSphere Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-10",
+      "ticker": "JAGU",
+      "name": "Jaguar Uranium Corp.",
+      "offer": 4.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-02-10",
+      "ticker": "SVIV",
+      "name": "Spring Valley Acquisition Corp. IV",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-11",
+      "ticker": "AGBK",
+      "name": "Agi Inc.",
+      "offer": 12.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-02-11",
+      "ticker": "DBCA",
+      "name": "D. Boral Acquisition I Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-11",
+      "ticker": "IACO",
+      "name": "Idea Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-11",
+      "ticker": "IPXG",
+      "name": "Inflection Point Acquisition Corp. VII",
+      "offer": null,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-11",
+      "ticker": "MWH",
+      "name": "SOLV Energy, Inc.",
+      "offer": 25.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-02-11",
+      "ticker": "TMTS",
+      "name": "Spartacus Acquisition Corp. II",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-12",
+      "ticker": "APC",
+      "name": "ARKO Petroleum Corp.",
+      "offer": 18.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-02-12",
+      "ticker": "HACQ",
+      "name": "HCM IV Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-12",
+      "ticker": "PAAC",
+      "name": "Proem Acquisition Corp I",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-12",
+      "ticker": "XFLH",
+      "name": "XFLH Capital Corporation",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-02-13",
+      "ticker": "RFAM",
+      "name": "RF Acquisition Corp III",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-13",
+      "ticker": "WLII",
+      "name": "Willow Lane Acquisition Corp. II",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-18",
+      "ticker": "AACI",
+      "name": "Armada Acquisition Corp. III",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-19",
+      "ticker": "AACO",
+      "name": "Abony Acquisition Corp. I",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-19",
+      "ticker": "ACAA",
+      "name": "Averin Capital Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-19",
+      "ticker": "PALO",
+      "name": "Paloma Acquisition Corp I",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-20",
+      "ticker": "ROC",
+      "name": "Rank One Computing Corporation",
+      "offer": 6.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-02-24",
+      "ticker": "CTAA",
+      "name": "ClearThink 1 Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-25",
+      "ticker": "MZYX",
+      "name": "MOZAYYX Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-26",
+      "ticker": "FVAV",
+      "name": "Fortress Value Acquisition Corp. V",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-26",
+      "ticker": "TRAD",
+      "name": "Apex Tech Acquisition Inc.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-26",
+      "ticker": "TRGS",
+      "name": "TRG Latin America Acquisitions Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-02-27",
+      "ticker": "GENB",
+      "name": "Generate Biomedicines, Inc.",
+      "offer": 16.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-02-27",
+      "ticker": "ILLU",
+      "name": "Illumination Acquisition Corp I",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-03-04",
+      "ticker": "GLED",
+      "name": "GalaxyEdge Acquisition Corporation",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-03-04",
+      "ticker": "KCAC",
+      "name": "Kensington Capital Acquisition Corp. VI",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-03-06",
+      "ticker": "MMED",
+      "name": "MiniMed Group, Inc.",
+      "offer": 20.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-03-11",
+      "ticker": "SUMA",
+      "name": "SUMA Acquisition Corporation",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-03-12",
+      "ticker": "MTAL",
+      "name": "Metals Acquisition Corp. II",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-03-12",
+      "ticker": "PAYP",
+      "name": "PayPay Corporation",
+      "offer": 16.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-03-13",
+      "ticker": "PONO",
+      "name": "Pono Capital Four, Inc.",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-03-17",
+      "ticker": "SWMR",
+      "name": "Swarmer, Inc",
+      "offer": 5.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-03-19",
+      "ticker": "BHAV",
+      "name": "BHAV Acquisition Corp",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-03-20",
+      "ticker": "BWIV",
+      "name": "Blue Water Acquisition Corp. IV",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-03-20",
+      "ticker": "GMTL",
+      "name": "Guardian Metal Resources PLC",
+      "offer": 16.35,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-03-20",
+      "ticker": "JAN",
+      "name": "Janus Living, Inc.",
+      "offer": 20.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-03-27",
+      "ticker": "FMAC",
+      "name": "Future Money Acquisition Corporation",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-03-27",
+      "ticker": "IPFX",
+      "name": "Inflection Point Acquisition Corp. VI",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-03-27",
+      "ticker": "QADR",
+      "name": "QDRO Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-03-31",
+      "ticker": "KPET",
+      "name": "KPET Ultra Paceline Corporation",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-04-01",
+      "ticker": "HMH",
+      "name": "HMH Holding Inc.",
+      "offer": 20.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-04-07",
+      "ticker": "AACP",
+      "name": "Apogee Acquisition Corp",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-04-07",
+      "ticker": "ACGC",
+      "name": "ACP Holdings Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-04-14",
+      "ticker": "MYX",
+      "name": "Maywood Acquisition Corp. 2",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-04-15",
+      "ticker": "NHIV",
+      "name": "NewHold Investment Corp IV",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-04-15",
+      "ticker": "QRED",
+      "name": "Quasaredge Acquisition Corporation",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-04-16",
+      "ticker": "ARXS",
+      "name": "Arxis, Inc.",
+      "offer": 28.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-04-16",
+      "ticker": "MAIR",
+      "name": "Madison Air Solutions Corporation",
+      "offer": 27.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-04-17",
+      "ticker": "ALMR",
+      "name": "Alamar Biosciences, Inc.",
+      "offer": 17.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-04-17",
+      "ticker": "AVEX",
+      "name": "AEVEX Corp.",
+      "offer": 20.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-04-17",
+      "ticker": "JATT",
+      "name": "JATT II Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-04-17",
+      "ticker": "KLRA",
+      "name": "Kailera Therapeutics, Inc.",
+      "offer": 16.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-04-22",
+      "ticker": "NHP",
+      "name": "National Healthcare Properties, Inc.",
+      "offer": 12.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-04-22",
+      "ticker": "YSWY",
+      "name": "Yesway, Inc.",
+      "offer": 20.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-04-23",
+      "ticker": "ELMT",
+      "name": "The Elmet Group Co.",
+      "offer": 14.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-04-24",
+      "ticker": "XE",
+      "name": "X-Energy, Inc.",
+      "offer": 23.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-04-28",
+      "ticker": "CXII",
+      "name": "Churchill Capital Corp XII",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-04-28",
+      "ticker": "IACQ",
+      "name": "Irenic Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-04-28",
+      "ticker": "PLUN",
+      "name": "Plutonian Acquisition Corp II",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-04-29",
+      "ticker": "CAII",
+      "name": "Collective Acquisition Corp. II",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-04-29",
+      "ticker": "PS",
+      "name": "Pershing Square Inc.",
+      "offer": 50.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-04-30",
+      "ticker": "ARCL",
+      "name": "ARC Group Acquisition I Corp",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-04-30",
+      "ticker": "AVLN",
+      "name": "Avalyn Pharma Inc.",
+      "offer": 18.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-04-30",
+      "ticker": "FTHA",
+      "name": "Forefront Tech Holdings Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-04-30",
+      "ticker": "GCGR",
+      "name": "General Catalyst Global Resilience Merger Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-04-30",
+      "ticker": "MCAH",
+      "name": "Mountain Crest Acquisition 6 Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-04-30",
+      "ticker": "RREV",
+      "name": "RRE Ventures Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-04-30",
+      "ticker": "SBMT",
+      "name": "Silver Bow Mining Corp.",
+      "offer": 11.5,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-04-30",
+      "ticker": "WENC",
+      "name": "West Enclave Merger Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-05-01",
+      "ticker": "COAG",
+      "name": "Hemab Therapeutics Holdings, Inc.",
+      "offer": 18.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-05-01",
+      "ticker": "MTNE",
+      "name": "CH4 Natural Solutions Corporation",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-05-01",
+      "ticker": "QLEP",
+      "name": "Quantum Leap Acquisition Corp",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-05-01",
+      "ticker": "SPTX",
+      "name": "Seaport Therapeutics, Inc.",
+      "offer": 18.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-05-06",
+      "ticker": "REA",
+      "name": "Rare Earths Americas, Inc.",
+      "offer": 19.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-05-06",
+      "ticker": "VECA",
+      "name": "Vernal Capital Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-05-07",
+      "ticker": "HAWK",
+      "name": "HawkEye 360, Inc.",
+      "offer": 26.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-05-07",
+      "ticker": "SAGU",
+      "name": "Shreya Acquisition Group",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-05-07",
+      "ticker": "SUJA",
+      "name": "Suja Life, Inc.",
+      "offer": 21.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-05-08",
+      "ticker": "MOBI",
+      "name": "Mobia Medical, Inc.",
+      "offer": 15.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-05-08",
+      "ticker": "ODTX",
+      "name": "Odyssey Therapeutics, Inc.",
+      "offer": 18.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-05-08",
+      "ticker": "OTAI",
+      "name": "Starlink AI Acquisition Corporation",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-05-13",
+      "ticker": "BREZ",
+      "name": "Breeze Acquisition Corp. II",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-05-13",
+      "ticker": "FRVO",
+      "name": "Fervo Energy Company",
+      "offer": 27.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-05-13",
+      "ticker": "GMRS",
+      "name": "GMR Solutions Inc.",
+      "offer": 15.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-05-14",
+      "ticker": "BXDC",
+      "name": "Blackstone Digital Infrastructure Trust Inc.",
+      "offer": 20.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-05-14",
+      "ticker": "CBRS",
+      "name": "Cerebras Systems Inc.",
+      "offer": 185.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-05-14",
+      "ticker": "EROK",
+      "name": "EagleRock Land, LLC",
+      "offer": 18.5,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-05-14",
+      "ticker": "GSRV",
+      "name": "GSR V Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-05-14",
+      "ticker": "MWC",
+      "name": "Micware Co., Ltd.",
+      "offer": 8.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-05-15",
+      "ticker": "ETSS",
+      "name": "Energy Transition Special Opportunities",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-05-15",
+      "ticker": "EXYN",
+      "name": "Exyn Technologies, Inc.",
+      "offer": 7.75,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-05-15",
+      "ticker": "GUAC",
+      "name": "Berto Acquisition Corp. II",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-05-15",
+      "ticker": "IDAC",
+      "name": "Iron Dome Acquisition I Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-05-15",
+      "ticker": "PTAC",
+      "name": "Patriot Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-05-15",
+      "ticker": "VIDA",
+      "name": "VIDA Global Inc.",
+      "offer": 4.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-05-19",
+      "ticker": "AMAN",
+      "name": "Amanat Acquisition Corp",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-05-20",
+      "ticker": "LCLN",
+      "name": "Lincoln International, Inc.",
+      "offer": 20.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-05-20",
+      "ticker": "RACC",
+      "name": "Research Alliance Corporation III",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-05-21",
+      "ticker": "APUR",
+      "name": "Aperture AC",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-05-21",
+      "ticker": "OHAC",
+      "name": "Oceanhawk Acquisition Corp",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-05-22",
+      "ticker": "BRKH",
+      "name": "Burtech Acquisition Corp II",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-05-22",
+      "ticker": "FXAC",
+      "name": "FortuneX Acquisition Corporation",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-05-22",
+      "ticker": "PECE",
+      "name": "Peace Acquisition Corp",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-05-27",
+      "ticker": "DGAC",
+      "name": "Disciplined Growth Acquisition Corporation",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-05-29",
+      "ticker": "BID",
+      "name": "Tribeca Strategic Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-06-03",
+      "ticker": "AADX",
+      "name": "Applied Aerospace & Defense, Inc.",
+      "offer": 20.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-03",
+      "ticker": "AESP",
+      "name": "Aeon Acquisition I Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-06-03",
+      "ticker": "APMC",
+      "name": "AmperCap Acquisition Company",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-06-03",
+      "ticker": "KEYY",
+      "name": "Keystone Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-06-04",
+      "ticker": "INIO",
+      "name": "Innio N.V.",
+      "offer": 27.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-04",
+      "ticker": "IPVV",
+      "name": "InterPrivate Investment Partners V, Inc.",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-04",
+      "ticker": "LFTO",
+      "name": "Liftoff Mobile, Inc.",
+      "offer": 23.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-04",
+      "ticker": "LTGR",
+      "name": "Long Table Growth Corp.",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-04",
+      "ticker": "QNT",
+      "name": "Quantinuum Inc.",
+      "offer": 60.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-04",
+      "ticker": "SSMR",
+      "name": "Sunshine Silver Mining & Refining Company",
+      "offer": 13.5,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-05",
+      "ticker": "FTRA",
+      "name": "FutureCorp Space Acquisition 1",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-06-09",
+      "ticker": "ISNR",
+      "name": "Snow Rothschild Acquisition Corp",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-06-09",
+      "ticker": "OCAC",
+      "name": "Ocean Capital Acquisition Corporation",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-06-09",
+      "ticker": "WHK",
+      "name": "WhiteHawk Minerals Corp.",
+      "offer": 26.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-10",
+      "ticker": "ATLQ",
+      "name": "JAB Acquisition Corp I",
+      "offer": null,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-06-10",
+      "ticker": "EROC",
+      "name": "ERock, Inc.",
+      "offer": 21.5,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-10",
+      "ticker": "PBLS",
+      "name": "Parabilis Medicines, Inc.",
+      "offer": 20.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-10",
+      "ticker": "SHOT",
+      "name": "RMG ML Sports Holdings",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-11",
+      "ticker": "FRBT",
+      "name": "Forbright, Inc.",
+      "offer": 18.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-12",
+      "ticker": "SPCX",
+      "name": "Space Exploration Technologies Corp.",
+      "offer": 135.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-16",
+      "ticker": "YICC",
+      "name": "Yorkville International Capital Corp.",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-17",
+      "ticker": "CAES",
+      "name": "Cantor Equity Partners VII, Inc.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-06-18",
+      "ticker": "FCBM",
+      "name": "First Carolina Financial Services, Inc.",
+      "offer": 12.5,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-18",
+      "ticker": "FISN",
+      "name": "Deep Fission, Inc.",
+      "offer": 16.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-18",
+      "ticker": "KARD",
+      "name": "Kardigan, Inc.",
+      "offer": 16.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-18",
+      "ticker": "TVIV",
+      "name": "Texas Ventures Acquisition IV Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-06-18",
+      "ticker": "WLCO",
+      "name": "Wilco 63 Corporation",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-23",
+      "ticker": "GHXI",
+      "name": "Gores Holdings XI, Inc.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-06-25",
+      "ticker": "ALPX",
+      "name": "Alpex Acquisition Corporation",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-06-25",
+      "ticker": "CGCF",
+      "name": "Cartesian Growth Corporation IV",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-25",
+      "ticker": "DPC",
+      "name": "DPC Holdings PLC",
+      "offer": 33.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-25",
+      "ticker": "DSC",
+      "name": "DSC Holdings Ltd.",
+      "offer": 17.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-25",
+      "ticker": "FWAC",
+      "name": "Futurewave Acquisition Corporation",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-06-26",
+      "ticker": "SIND",
+      "name": "Sinda Ltd.",
+      "offer": 12.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-06-30",
+      "ticker": "AAC",
+      "name": "Ares Acquisition Corporation III",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-07-01",
+      "ticker": "BSP",
+      "name": "Bending Spoons S.p.A.",
+      "offer": 29.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-07-01",
+      "ticker": "ITG",
+      "name": "ITG, Inc.",
+      "offer": 16.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-07-01",
+      "ticker": "LIME",
+      "name": "Neutron Holdings, Inc.",
+      "offer": 25.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-07-01",
+      "ticker": "OSPR",
+      "name": "Osprey Acquisition Corp. III",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-07-02",
+      "ticker": "MIAC",
+      "name": "Meridian3 Industrials Acquisition Corp",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-07-02",
+      "ticker": "VII",
+      "name": "Viking Acquisition Corp. II",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-07-07",
+      "ticker": "BCCQ",
+      "name": "Bleichroeder Acquisition Corp. III",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-07-08",
+      "ticker": "FDMM",
+      "name": "Freedom Metals Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-07-09",
+      "ticker": "CCCT",
+      "name": "Columbus Circle Capital Corp III",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-07-09",
+      "ticker": "MRCO",
+      "name": "Mercator Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-07-10",
+      "ticker": "SAMO",
+      "name": "Samos Energy Acquisition Corporation",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-07-10",
+      "ticker": "SKHY",
+      "name": "SK hynix Inc.",
+      "offer": 149.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "RACD",
+      "name": "Research Alliance Corporation IV",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-07-14",
+      "ticker": "JONE",
+      "name": "Jones Ventures INTL Acquisition1 Corp",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-07-16",
+      "ticker": "CSQR",
+      "name": "Csquare, Inc.",
+      "offer": 21.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-07-16",
+      "ticker": "STDN",
+      "name": "Standard Nuclear, Inc.",
+      "offer": 15.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-07-17",
+      "ticker": "AMAC",
+      "name": "AMR Resources Acquisition Corp",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-07-21",
+      "ticker": "BRTM",
+      "name": "B&R Technology Merger Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-07-21",
+      "ticker": "NCO",
+      "name": "Southern Cross Acquisition I Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-07-24",
+      "ticker": "MTAK",
+      "name": "Market Technology Acquisition Corp",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-07-24",
+      "ticker": "PLCI",
+      "name": "Pelican Acquisition II Corporation",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-07-24",
+      "ticker": "SCTX",
+      "name": "Scribe Therapeutics Inc.",
+      "offer": 15.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-07-28",
+      "ticker": "CATL",
+      "name": "Catalyst Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-07-29",
+      "ticker": "IMC",
+      "name": "IMC Rare Earths Ltd",
+      "offer": 5.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-07-30",
+      "ticker": "JMKE",
+      "name": "Jersey Mike's Subs Inc.",
+      "offer": 23.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-07-30",
+      "ticker": "REF",
+      "name": "Reformation Inc.",
+      "offer": 15.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-07-31",
+      "ticker": "APMD",
+      "name": "Apnimed, Inc.",
+      "offer": 16.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-07-31",
+      "ticker": "EWAV",
+      "name": "East West Ave Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-07-31",
+      "ticker": "XIII",
+      "name": "Churchill Capital Corp XIII",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-08-04",
+      "ticker": "FJDI",
+      "name": "ARC Group Securities Acquisition I",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-08-04",
+      "ticker": "THEO",
+      "name": "BOA Acquisition Corp. II",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-08-05",
+      "ticker": "ATTO",
+      "name": "Attovia Therapeutics, Inc.",
+      "offer": 17.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-08-05",
+      "ticker": "TCGX",
+      "name": "TCGX Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-08-06",
+      "ticker": "BRVE",
+      "name": "Braveheart Bio, Inc.",
+      "offer": 18.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-08-07",
+      "ticker": "BLSM",
+      "name": "BlossomHill Therapeutics, Inc.",
+      "offer": 16.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-08-07",
+      "ticker": "LTGO",
+      "name": "Latigo Biotherapeutics, Inc.",
+      "offer": 18.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-08-07",
+      "ticker": "OCLT",
+      "name": "OceanLight Acquisition Corporation",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-08-07",
+      "ticker": "PNAQ",
+      "name": "Pinnacle Acquisition Corporation",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-08-07",
+      "ticker": "TP",
+      "name": "Ticketplus Ltd.",
+      "offer": 8.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-08-12",
+      "ticker": "FOIL",
+      "name": "Londian Wason New Energy Tech Inc.",
+      "offer": 22.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-08-12",
+      "ticker": "SNSC",
+      "name": "SunScout Holding Limited",
+      "offer": 5.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-08-12",
+      "ticker": "VOGX",
+      "name": "Vogenx, Inc.",
+      "offer": 13.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-08-13",
+      "ticker": "TBCV",
+      "name": "Thunder Bridge Capital Partners V, Ltd.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-08-18",
+      "ticker": "NSAI",
+      "name": "Northstrive Acquisition Corp I.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-08-18",
+      "ticker": "XTER",
+      "name": "Xterax Corporation II",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-08-19",
+      "ticker": "LYNX",
+      "name": "Lyntris Inc.",
+      "offer": 17.5,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-08-25",
+      "ticker": "ADBT",
+      "name": "Advasa Holdings, Inc.",
+      "offer": 10.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-08-26",
+      "ticker": "JTTT",
+      "name": "JATT III Acquisition Corp",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-08-26",
+      "ticker": "SCAT",
+      "name": "Southern Cross Acquisition II Corp",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-08-27",
+      "ticker": "RNAQ",
+      "name": "Rainier Acquisition Corporation",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-08-28",
+      "ticker": "IPHX",
+      "name": "Inflection Point Acquisition Corp. VIII",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-09-01",
+      "ticker": "TLAC",
+      "name": "Three Lions Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-09-16",
+      "ticker": "ASBH",
+      "name": "American Savings Bank, National Association",
+      "offer": 16.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-09-17",
+      "ticker": "HYAC",
+      "name": "Haymaker Acquisition Corp V",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-09-18",
+      "ticker": "ETRA",
+      "name": "Electra Therapeutics, Inc.",
+      "offer": 15.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-09-18",
+      "ticker": "LEDR",
+      "name": "Leader's Advantage Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-09-18",
+      "ticker": "OIG",
+      "name": "Orion180 Insurance Group Inc.",
+      "offer": 12.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-09-23",
+      "ticker": "LOVI",
+      "name": "Live Oak Acquisition Corp. VI",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-09-25",
+      "ticker": "ADRX",
+      "name": "ADARx Pharmaceuticals, Inc.",
+      "offer": 17.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-09-25",
+      "ticker": "BRRK",
+      "name": "Bluerock Acquisition Corp. II",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-09-30",
+      "ticker": "ACCV",
+      "name": "Accelevation Holdings Corp.",
+      "offer": 18.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-10-01",
+      "ticker": "PORT",
+      "name": "Southport Acquisition Corp. II",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-10-06",
+      "ticker": "PAXG",
+      "name": "Pine Tree Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-10-09",
+      "ticker": "RTSN",
+      "name": "Retension Pharmaceuticals, Inc.",
+      "offer": 12.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-10-09",
+      "ticker": "TRXB",
+      "name": "TRex Bio, Inc.",
+      "offer": 14.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-10-14",
+      "ticker": "FLSC",
+      "name": "Frazier Life Sciences Acquisition Corp II",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-10-15",
+      "ticker": "AMRO",
+      "name": "Amaero Inc.",
+      "offer": 4.25,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-10-15",
+      "ticker": "IAM",
+      "name": "Iambic Therapeutics, Inc.",
+      "offer": 16.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-10-16",
+      "ticker": "CTY",
+      "name": "City Therapeutics, Inc.",
+      "offer": 18.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-10-16",
+      "ticker": "TCXB",
+      "name": "TCGX Acquisition Corp. II",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-10-23",
+      "ticker": "LYCA",
+      "name": "Lycia Therapeutics, Inc.",
+      "offer": 18.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-10-27",
+      "ticker": "SCQC",
+      "name": "SPACCircle Acquisition Corp.",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-10-29",
+      "ticker": "BHAI",
+      "name": "Bhav Acquisition Corp II",
+      "offer": 10.0,
+      "kind": "SPAC"
+    },
+    {
+      "date": "2026-10-30",
+      "ticker": "ASPE",
+      "name": "Aspen Neuroscience, Inc.",
+      "offer": 15.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-10-30",
+      "ticker": "BBTX",
+      "name": "Bambusa Therapeutics, Inc.",
+      "offer": 16.0,
+      "kind": "Listing"
+    },
+    {
+      "date": "2026-11-02",
+      "ticker": "NARA",
+      "name": "Narragansett Bancorp, Inc.",
+      "offer": null,
+      "kind": "Listing"
+    }
+  ],
+  "updated_at": "2026-11-04T20:30:00+00:00",
+  "source": "https://stockanalysis.com/ipos/2026/"
+}

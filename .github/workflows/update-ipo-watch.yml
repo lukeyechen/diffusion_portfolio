@@ -1,0 +1,34 @@
+name: Update IPO listings
+on:
+  schedule:
+    - cron: '30 23 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ipo-data-update
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: ipo_watch
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify parser and fallback behavior
+        run: python -m unittest discover -s tests
+      - name: Refresh completed IPO listings
+        run: python ipo_data.py
+      - name: Save updated snapshot
+        run: |
+          if git diff --quiet -- data/ipos.json; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/ipos.json
+          git commit -m "Update IPO directory snapshot"
+          git push
